@@ -1,0 +1,143 @@
+﻿@inherits LayoutComponentBase
+@inject ThemeService Theme
+@inject AppBootService Boot
+@inject IJSRuntime Js
+@implements IDisposable
+
+@if (!_bootResolved)
+{
+    <div class="splash-screen splash-pending" aria-busy="true"></div>
+}
+else if (!Boot.IsReady)
+{
+    <SplashOverlay />
+}
+else
+{
+    <div class="app-shell @(Theme.IsDark ? "theme-dark" : null)">
+        <aside class="sidebar">
+            <div class="brand">
+                <img class="brand-mark" src="branding/icon.png" alt="@AppBrand.Name" width="44" height="44" />
+                <div class="brand-text">
+                    <div class="brand-name">@AppBrand.Name</div>
+                    <div class="brand-sub">Financial Forecasting System</div>
+                </div>
+            </div>
+            <nav class="nav">
+                <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </NavLink>
+                <NavLink class="nav-link" href="transactions">
+                    <i class="bi bi-list-ul"></i> Transactions
+                </NavLink>
+                <NavLink class="nav-link" href="reports">
+                    <i class="bi bi-bar-chart-line"></i> Reports
+                </NavLink>
+                <NavLink class="nav-link" href="planning">
+                    <i class="bi bi-pie-chart"></i> Planning
+                </NavLink>
+                <NavLink class="nav-link" href="goals">
+                    <i class="bi bi-flag"></i> Goals
+                </NavLink>
+                <NavLink class="nav-link" href="forecast">
+                    <i class="bi bi-graph-up-arrow"></i> Forecast
+                </NavLink>
+            </nav>
+            <div class="sidebar-footer">
+                <button type="button" class="theme-toggle" @onclick="ToggleTheme">
+                    <i class="bi @(Theme.IsDark ? "bi-sun" : "bi-moon-stars")"></i>
+                    @(Theme.IsDark ? "Light theme" : "Dark theme")
+                </button>
+                <p class="tagline">Know your money.<br />Forecast your future.</p>
+                <p class="proto-badge">V0 · In-memory demo</p>
+            </div>
+        </aside>
+        <div class="main">
+            <main class="content">
+                @Body
+            </main>
+        </div>
+    </div>
+}
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">🗙</a>
+</div>
+
+@code {
+    private bool _bootResolved;
+
+    protected override void OnInitialized()
+    {
+        Theme.Changed += OnThemeChanged;
+        Boot.Changed += OnBootChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _bootResolved) return;
+
+        try
+        {
+            var stored = await Js.InvokeAsync<string?>("ffsTheme.get");
+            if (stored == "dark")
+            {
+                Theme.SetDark(true);
+                await Js.InvokeVoidAsync("ffsTheme.set", "dark");
+            }
+        }
+        catch (JSException) { /* ignore */ }
+        catch (InvalidOperationException) { /* ignore */ }
+
+        try
+        {
+            var showSplash = await Js.InvokeAsync<bool>("ffsSplash.shouldShow");
+            Boot.ApplySplashCache(showSplash);
+            _bootResolved = true;
+            await InvokeAsync(StateHasChanged);
+
+            if (showSplash)
+            {
+                await Boot.EnsureStartedAsync();
+                // Mark after splash finishes — do not hide mid-animation
+                await Js.InvokeVoidAsync("ffsSplash.markSeen");
+                await Js.InvokeVoidAsync("ffsSplash.applyDocumentFlag");
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // JS not ready yet — retry on next render; do not start splash
+        }
+        catch (JSException)
+        {
+            // Prefer skip over forced splash if interop fails after connect
+            Boot.ApplySplashCache(showSplash: false);
+            _bootResolved = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        Theme.Toggle();
+        var value = Theme.IsDark ? "dark" : "light";
+        try
+        {
+            await Js.InvokeVoidAsync("ffsTheme.set", value);
+            await Js.InvokeVoidAsync("ffsTheme.save", value);
+        }
+        catch { /* ignore */ }
+    }
+
+    private void OnThemeChanged() => InvokeAsync(StateHasChanged);
+    private void OnBootChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Theme.Changed -= OnThemeChanged;
+        Boot.Changed -= OnBootChanged;
+    }
+}

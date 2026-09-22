@@ -1,0 +1,119 @@
+@page "/forecast"
+@inject SimpleProjectionService ProjectionSvc
+@inject ThemeService Theme
+@implements IDisposable
+
+<PageTitle>@AppBrand.Name · Forecast</PageTitle>
+
+<div class="page-hero">
+    <div class="eyebrow">Forecast</div>
+    <h1>Simple Projection</h1>
+    <p>An experimental average-based outlook — not the final @AppBrand.Name forecasting engine.</p>
+</div>
+
+<div class="notice">
+    <strong>Simple Projection</strong> — projected figures use the average of recent Money In / Money Out
+    (last ~3 months, excluding transfers and ignored transactions). This is a learning prototype, not an intelligent prediction.
+</div>
+
+<div class="preset-row">
+    @foreach (var m in new[] { 3, 6, 12 })
+    {
+        <button type="button" class="@(_months == m ? "active" : null)" @onclick="() => SetMonths(m)">@m months</button>
+    }
+</div>
+
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <div class="kpi-label">Current balance (est.)</div>
+        <div class="kpi-value">@MoneyFormat.Zar(_result.CurrentBalance)</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Avg monthly income</div>
+        <div class="kpi-value positive">@MoneyFormat.Zar(_result.AvgMonthlyIncome)</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Avg monthly expenses</div>
+        <div class="kpi-value negative">@MoneyFormat.Zar(_result.AvgMonthlyExpenses)</div>
+    </div>
+</div>
+
+<div class="grid-3" style="margin-bottom:1rem;">
+    <div class="card">
+        <div class="kpi-label">Projected income (@_months mo)</div>
+        <div class="kpi-value positive" style="font-size:1.4rem;">@MoneyFormat.Zar(_result.ProjectedIncome)</div>
+    </div>
+    <div class="card">
+        <div class="kpi-label">Projected expenses (@_months mo)</div>
+        <div class="kpi-value negative" style="font-size:1.4rem;">@MoneyFormat.Zar(_result.ProjectedExpenses)</div>
+    </div>
+    <div class="card">
+        <div class="kpi-label">Projected balance</div>
+        <div class="kpi-value @(_result.ProjectedBalance >= 0 ? "positive" : "negative")" style="font-size:1.4rem;">@MoneyFormat.Zar(_result.ProjectedBalance)</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Projected balance path</h3>
+        <span class="muted small">Simple Projection · @_months months</span>
+    </div>
+    <ApexChart @key="@($"proj-{_chartKey}-{Theme.IsDark}")" TItem="ProjectionPoint" Height="340" Options="_chartOptions">
+        <ApexPointSeries TItem="ProjectionPoint"
+                         Items="_result.Points.ToList()"
+                         Name="Projected balance"
+                         SeriesType="SeriesType.Area"
+                         XValue="@(e => e.Label)"
+                         YValue="@(e => e.Balance)" />
+    </ApexChart>
+</div>
+
+@code {
+    private int _months = 6;
+    private int _chartKey;
+    private SimpleProjectionResult _result = null!;
+    private ApexChartOptions<ProjectionPoint> _chartOptions = null!;
+
+    protected override void OnInitialized()
+    {
+        Theme.Changed += OnThemeChanged;
+        Reload();
+    }
+
+    private void OnThemeChanged()
+    {
+        RebuildOptions();
+        _chartKey++;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void SetMonths(int months)
+    {
+        _months = months;
+        Reload();
+    }
+
+    private void Reload()
+    {
+        _result = ProjectionSvc.Project(_months);
+        RebuildOptions();
+        _chartKey++;
+    }
+
+    private void RebuildOptions()
+    {
+        _chartOptions = ChartThemeOptions.Create<ProjectionPoint>(Theme.IsDark, o =>
+        {
+            o.Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 };
+            o.DataLabels = new DataLabels { Enabled = false };
+            o.Colors = ["#38bdf8"];
+            if (o.Yaxis is { Count: > 0 })
+            {
+                o.Yaxis[0].Labels ??= new YAxisLabels();
+                o.Yaxis[0].Labels.Formatter = @"function(val){ return 'R' + Number(val).toLocaleString('en-ZA'); }";
+            }
+        });
+    }
+
+    public void Dispose() => Theme.Changed -= OnThemeChanged;
+}

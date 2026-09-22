@@ -1,0 +1,50 @@
+@page "/goals"
+@inject GoalService GoalSvc
+@inject NavigationManager Nav
+
+<PageTitle>@AppBrand.Name · Goals</PageTitle>
+
+<div class="page-hero">
+    <div class="eyebrow">Goals</div>
+    <h1>Progress toward what matters</h1>
+    <p>Click a goal to see contribution history and related money movement.</p>
+</div>
+
+@{
+    var goals = GoalSvc.GetActiveGoals();
+}
+
+<div class="grid-2">
+    @foreach (var g in goals)
+    {
+        var pct = g.Goal.Progress * 100;
+        <div class="card goal-card clickable-card" @onclick="() => OpenGoal(g.Goal.Id)">
+            <div class="goal-meta">
+                <h3 style="margin:0;">@g.Goal.Name</h3>
+                <span class="badge">@pct.ToString("0")%</span>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(g.Goal.Description))
+            {
+                <p class="muted small">@g.Goal.Description</p>
+            }
+            <div class="kpi-value" style="font-size:1.35rem;">
+                @MoneyFormat.Zar(g.Goal.CurrentAmount)
+                <span class="muted" style="font-size:0.95rem; font-weight:500;"> / @MoneyFormat.Zar(g.Goal.TargetAmount)</span>
+            </div>
+            <div class="progress"><span style="width:@pct.ToString("0.##")%"></span></div>
+            <div class="goal-meta muted small">
+                <span>Remaining @MoneyFormat.Zar(g.Goal.Remaining)</span>
+                <span>
+                    @(g.Goal.TargetDate.HasValue
+                        ? $"Target: {g.Goal.TargetDate:MMMM yyyy}"
+                        : "No target date")
+                </span>
+            </div>
+            <p class="muted small" style="margin-top:0.75rem;">Open details →</p>
+        </div>
+    }
+</div>
+
+@code {
+    private void OpenGoal(long id) => Nav.NavigateTo($"goals/{id}");
+}

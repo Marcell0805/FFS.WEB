@@ -1,0 +1,125 @@
+@page "/goals/{GoalId:long}"
+@inject GoalService GoalSvc
+@inject IFinancialDataProvider Data
+@inject NavigationManager Nav
+
+<PageTitle>@AppBrand.Name · Goal</PageTitle>
+
+@if (_goal is null)
+{
+    <div class="page-hero">
+        <h1>Goal not found</h1>
+        <a href="goals">Back to goals</a>
+    </div>
+}
+else
+{
+    var g = _goal;
+    var pct = g.Goal.Progress * 100;
+
+    <div class="page-hero">
+        <div class="eyebrow"><a href="goals">Goals</a> / detail</div>
+        <h1>@g.Goal.Name</h1>
+        <p>@(g.Goal.Description ?? "Contribution history and related ledger activity for this goal.")</p>
+    </div>
+
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-label">Progress</div>
+            <div class="kpi-value">@pct.ToString("0")%</div>
+            <div class="progress"><span style="width:@pct.ToString("0.##")%"></span></div>
+            <div class="muted small">@MoneyFormat.Zar(g.Goal.CurrentAmount) / @MoneyFormat.Zar(g.Goal.TargetAmount)</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Contributions in</div>
+            <div class="kpi-value positive">@MoneyFormat.Zar(g.MoneyIn)</div>
+            <div class="muted small">Logged goal contributions</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Target date</div>
+            <div class="kpi-value" style="font-size:1.35rem;">
+                @(g.Goal.TargetDate?.ToString("MMM yyyy") ?? "—")
+            </div>
+            <div class="muted small">Remaining @MoneyFormat.Zar(g.Goal.Remaining)</div>
+        </div>
+    </div>
+
+    <div class="grid-2">
+        <div class="card">
+            <h3>Money in · contributions</h3>
+            @if (g.Contributions.Count == 0)
+            {
+                <p class="muted">No contributions logged.</p>
+            }
+            else
+            {
+                @foreach (var c in g.Contributions)
+                {
+                    <div class="list-row">
+                        <div>
+                            <div>@c.ContributionDate.ToString("dd MMM yyyy")</div>
+                            <div class="muted small">@(c.Notes ?? "Contribution")</div>
+                        </div>
+                        <span class="amount in">@MoneyFormat.Zar(c.Amount)</span>
+                    </div>
+                }
+            }
+        </div>
+        <div class="card">
+            <div class="card-header">
+                <h3>Related ledger activity</h3>
+                <button type="button" class="secondary" @onclick="OpenInTransactions">
+                    Open in transactions
+                </button>
+            </div>
+            @if (g.RelatedTransactions.Count == 0)
+            {
+                <p class="muted">No matching account transactions (merchant/description containing this goal name).</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Merchant</th>
+                                <th>Bank</th>
+                                <th>Direction</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in g.RelatedTransactions)
+                            {
+                                var bank = Data.Accounts.FirstOrDefault(a => a.Id == t.AccountId)?.InstitutionName ?? "—";
+                                <tr>
+                                    <td>@t.TransactionDate.ToString("dd MMM yyyy")</td>
+                                    <td>@t.Merchant</td>
+                                    <td>@bank</td>
+                                    <td><span class="badge @t.Direction.ToString().ToLowerInvariant()">@t.Direction</span></td>
+                                    <td class="amount @(t.Direction == MoneyDirection.MoneyIn ? "in" : t.Direction == MoneyDirection.MoneyOut ? "out" : "transfer")">
+                                        @MoneyFormat.Zar(t.Amount)
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public long GoalId { get; set; }
+    private GoalView? _goal;
+
+    protected override void OnParametersSet() => _goal = GoalSvc.GetGoal(GoalId);
+
+    private void OpenInTransactions()
+    {
+        if (_goal is null) return;
+        Nav.NavigateTo($"transactions?search={Uri.EscapeDataString(_goal.Goal.Name)}");
+    }
+}

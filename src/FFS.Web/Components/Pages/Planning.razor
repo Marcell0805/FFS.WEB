@@ -1,0 +1,84 @@
+@page "/planning"
+@inject BudgetService BudgetSvc
+@inject IFinancialDataProvider Data
+
+<PageTitle>@AppBrand.Name · Planning</PageTitle>
+
+<div class="page-hero">
+    <div class="eyebrow">Planning</div>
+    <h1>Budget vs actual</h1>
+    <p>Needs, Wants and Savings buckets — separate from category types. Planned amounts compared to this month’s MoneyOut.</p>
+</div>
+
+@{
+    var overview = BudgetSvc.GetCurrentMonthOverview();
+    var monthLabel = new DateTime(overview.Year, overview.Month, 1).ToString("MMMM yyyy");
+}
+
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <div class="kpi-label">Income target · @monthLabel</div>
+        <div class="kpi-value">@MoneyFormat.Zar(overview.IncomeTarget)</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Actual income</div>
+        <div class="kpi-value positive">@MoneyFormat.Zar(overview.ActualIncome)</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Variance</div>
+        @{
+            var incomeVar = overview.ActualIncome - overview.IncomeTarget;
+        }
+        <div class="kpi-value @(incomeVar >= 0 ? "positive" : "negative")">@MoneyFormat.Zar(incomeVar)</div>
+    </div>
+</div>
+
+<div class="grid-3">
+    @foreach (var b in overview.Buckets)
+    {
+        <div class="card">
+            <h3>@b.Bucket</h3>
+            <div class="list-row"><span>Planned</span><span class="amount">@MoneyFormat.Zar(b.Planned)</span></div>
+            <div class="list-row"><span>Actual</span><span class="amount out">@MoneyFormat.Zar(b.Actual)</span></div>
+            <div class="list-row"><span>Remaining</span><span class="amount @(b.Remaining >= 0 ? "in" : "out")">@MoneyFormat.Zar(b.Remaining)</span></div>
+            @{
+                var pct = b.Planned <= 0 ? 0 : Math.Clamp((double)(b.Actual / b.Planned) * 100, 0, 100);
+            }
+            <div class="progress"><span style="width:@pct.ToString("0.##")%"></span></div>
+            <div class="muted small">@pct.ToString("0")% of planned used</div>
+        </div>
+    }
+</div>
+
+<div class="card" style="margin-top:1rem;">
+    <h3>Category assignments</h3>
+    <p class="muted small">Category type (Income / Expense / Transfer) stays separate from budget bucket (Needs / Wants / Savings).</p>
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Type</th>
+                    <th>Bucket</th>
+                    <th>Planned</th>
+                    <th>Actual</th>
+                    <th>Remaining</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in overview.Categories)
+                {
+                    var type = Data.Categories.FirstOrDefault(c => c.Id == row.CategoryId)?.CategoryType.ToString() ?? "—";
+                    <tr>
+                        <td>@row.CategoryName</td>
+                        <td><span class="badge">@type</span></td>
+                        <td>@row.Bucket</td>
+                        <td class="amount">@MoneyFormat.Zar(row.Planned)</td>
+                        <td class="amount out">@MoneyFormat.Zar(row.Actual)</td>
+                        <td class="amount @(row.Remaining >= 0 ? "in" : "out")">@MoneyFormat.Zar(row.Remaining)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

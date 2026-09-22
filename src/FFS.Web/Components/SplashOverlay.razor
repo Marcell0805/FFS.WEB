@@ -1,0 +1,31 @@
+@inject AppBootService Boot
+@implements IDisposable
+
+<div class="splash-screen" aria-live="polite" aria-busy="true">
+    <div class="splash-glow" aria-hidden="true"></div>
+    <div class="splash-center">
+        <div class="splash-icon-wrap">
+            <img class="splash-icon" src="branding/icon.png" alt="@AppBrand.Name" width="112" height="112" />
+        </div>
+        <div class="splash-brand">@AppBrand.Name</div>
+        <p class="splash-tagline">Know your money. Forecast your future.</p>
+        <div class="splash-trend" aria-hidden="true">
+            <svg viewBox="0 0 120 18" width="120" height="18">
+                <path class="splash-trend-line" d="M2 14 C 20 14, 28 12, 40 10 S 60 4, 78 6 S 100 2, 118 3" fill="none" stroke-width="2.5" stroke-linecap="round" />
+            </svg>
+        </div>
+        <p class="splash-status">@Boot.Status</p>
+        <div class="splash-progress">
+            <div class="splash-progress-bar" style="width:@((Boot.Progress * 100).ToString("0.##"))%"></div>
+        </div>
+    </div>
+    <div class="splash-footer">V0 · @AppBrand.Name</div>
+</div>
+
+@code {
+    protected override void OnInitialized() => Boot.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Boot.Changed -= OnChanged;
+}
