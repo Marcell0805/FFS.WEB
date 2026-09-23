@@ -2,7 +2,7 @@ name: Deploy Blazor App to GitHub Pages
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 permissions:
@@ -32,8 +32,8 @@ jobs:
 
       - name: Prepare GitHub Pages site
         run: |
-          # Project site lives at https://<user>.github.io/FFS.WEB/
-          sed -i 's|<base href="/" />|<base href="/FFS.WEB/" />|g' publish/wwwroot/index.html
+          # Custom domain: https://ffs.foxbytelabs.co.za/ (root, not /FFS.WEB/)
+          printf 'ffs.foxbytelabs.co.za\n' > publish/wwwroot/CNAME
           # SPA deep-links: GitHub Pages serves 404.html for unknown paths
           cp publish/wwwroot/index.html publish/wwwroot/404.html
           touch publish/wwwroot/.nojekyll

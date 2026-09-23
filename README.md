@@ -15,8 +15,13 @@ No database. No authentication. Demo data is seeded in memory in the browser.
 
 ## GitHub Pages
 
-Push to `main` (or run the **Deploy Blazor App to GitHub Pages** workflow). The site is published as a project page:
+Push to `master`/`main` (or run the **Deploy Blazor App to GitHub Pages** workflow).
 
-`https://<you>.github.io/FFS.WEB/`
+Live URL: **https://ffs.foxbytelabs.co.za/**
 
-In the repo **Settings → Pages**, set Source to **GitHub Actions**.
+In the repo **Settings → Pages**:
+1. Source: **GitHub Actions**
+2. Custom domain: `ffs.foxbytelabs.co.za`
+3. After DNS is green, enable **Enforce HTTPS**
+
+Do not open `/FFS.WEB/` on the subdomain — that path is the old project-site URL.
