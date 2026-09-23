@@ -2,7 +2,7 @@ namespace FFS.Web.Services;
 
 public sealed class ThemeService
 {
-    public bool IsDark { get; private set; }
+    public bool IsDark { get; private set; } = true;
 
     public event Action? Changed;
 

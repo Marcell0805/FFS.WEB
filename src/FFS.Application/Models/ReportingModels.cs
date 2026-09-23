@@ -13,3 +13,5 @@ public record DailyCashFlowPoint(DateTime Day, string Label, decimal MoneyIn, de
 public record ChartPoint(string Label, decimal Value);
 
 public record NamedValue(string Name, decimal Value);
+
+public record CategoryMonthPoint(string CategoryName, string Month, decimal Total);

@@ -1,5 +1,6 @@
 using FFS.Application.Data;
 using FFS.Application.Models;
+using FFS.Domain;
 using FFS.Domain.Entities;
 using FFS.Domain.Enums;
 
@@ -7,7 +8,8 @@ namespace FFS.Application.Services;
 
 /// <summary>
 /// Mirrors FFS Mobile ReportingService rules:
-/// Ignored excluded; Transfer excluded from cash flow; spending = MoneyOut only.
+/// Ignored, Transfer, and own-account transfers excluded from cash flow;
+/// spending = MoneyOut only.
 /// </summary>
 public sealed class ReportingService
 {
@@ -22,8 +24,7 @@ public sealed class ReportingService
 
         foreach (var txn in TransactionsInRange(start, end))
         {
-            if (txn.Status == TransactionStatus.Ignored) continue;
-            if (!MoneyDirectionRules.AffectsCashFlow(txn.Direction)) continue;
+            if (CashFlowRules.SkipFromCashFlow(txn)) continue;
 
             counted++;
             if (MoneyDirectionRules.IsIncome(txn.Direction))
@@ -40,7 +41,7 @@ public sealed class ReportingService
         var categories = _data.Categories.ToDictionary(c => c.Id);
 
         return TransactionsInRange(start, end)
-            .Where(t => t.Status != TransactionStatus.Ignored)
+            .Where(t => !CashFlowRules.SkipFromCashFlow(t))
             .Where(t => t.Direction == MoneyDirection.MoneyOut)
             .GroupBy(t => t.CategoryId)
             .Select(g =>
@@ -59,7 +60,7 @@ public sealed class ReportingService
         var categories = _data.Categories.ToDictionary(c => c.Id);
 
         return TransactionsInRange(start, end)
-            .Where(t => t.Status != TransactionStatus.Ignored)
+            .Where(t => !CashFlowRules.SkipFromCashFlow(t))
             .Where(t => t.Direction == MoneyDirection.MoneyOut)
             .GroupBy(t => string.IsNullOrWhiteSpace(t.Merchant) ? "Unknown" : t.Merchant)
             .Select(g =>
@@ -115,8 +116,7 @@ public sealed class ReportingService
 
         foreach (var txn in TransactionsInRange(start, end))
         {
-            if (txn.Status == TransactionStatus.Ignored) continue;
-            if (!MoneyDirectionRules.AffectsCashFlow(txn.Direction)) continue;
+            if (CashFlowRules.SkipFromCashFlow(txn)) continue;
 
             var day = txn.TransactionDate.Date;
             if (!map.ContainsKey(day)) continue;
@@ -154,8 +154,49 @@ public sealed class ReportingService
         return points;
     }
 
+    public IReadOnlyList<CategoryMonthPoint> SpendingCategoryTrend(DateTime start, DateTime end, int top = 4)
+    {
+        var topCats = SpendingByCategory(start, end).Take(top).ToList();
+        var months = MonthlyTrend(start, end);
+        var points = new List<CategoryMonthPoint>();
+        foreach (var cat in topCats)
+        {
+            foreach (var month in months)
+            {
+                var ms = month.MonthStart < start ? start : month.MonthStart;
+                var me = month.MonthStart.AddMonths(1).AddTicks(-1);
+                if (me > end) me = end;
+                var total = TransactionsInRange(ms, me)
+                    .Where(t => !CashFlowRules.SkipFromCashFlow(t))
+                    .Where(t => t.Direction == MoneyDirection.MoneyOut)
+                    .Where(t => t.CategoryId == cat.CategoryId ||
+                                (cat.CategoryId is null && t.CategoryId is null))
+                    .Sum(t => t.Amount);
+                points.Add(new CategoryMonthPoint(cat.CategoryName, month.Month, total));
+            }
+        }
+
+        return points;
+    }
+
+    public decimal AccountBalance(long accountId)
+    {
+        var account = _data.Accounts.FirstOrDefault(a => a.Id == accountId);
+        if (account is null) return 0;
+        var delta = 0m;
+        foreach (var txn in _data.Transactions.Where(t => t.AccountId == accountId))
+        {
+            if (txn.Status == TransactionStatus.Ignored) continue;
+            if (txn.Direction == MoneyDirection.MoneyIn) delta += txn.Amount;
+            else if (txn.Direction == MoneyDirection.MoneyOut) delta -= txn.Amount;
+        }
+
+        return account.OpeningBalance + delta;
+    }
+
     public IReadOnlyList<Transaction> RecentTransactions(int take = 8) =>
         _data.Transactions
+            .Where(t => !CashFlowRules.SkipFromCashFlow(t))
             .OrderByDescending(t => t.TransactionDate)
             .ThenByDescending(t => t.Id)
             .Take(take)

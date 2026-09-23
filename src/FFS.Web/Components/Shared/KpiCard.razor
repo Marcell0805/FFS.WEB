@@ -1,0 +1,29 @@
+<div class="stat-tile tone-@(string.IsNullOrWhiteSpace(Tone) ? "neutral" : Tone) @(Clickable ? "clickable-card" : null)" @onclick="OnClick">
+    <div class="stat-head">
+        <span class="stat-ico @Tone"><i class="bi @Icon"></i></span>
+        <span class="stat-lbl">@Label</span>
+        @if (!string.IsNullOrWhiteSpace(Delta))
+        {
+            <span class="stat-delta @(DeltaUp ? "up" : "down")">@Delta</span>
+        }
+    </div>
+    <div class="stat-val @Tone">@Value</div>
+    @if (!string.IsNullOrWhiteSpace(Caption))
+    {
+        <div class="stat-cap">@Caption</div>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = "bi-circle";
+    [Parameter] public string Tone { get; set; } = "";
+    [Parameter] public string? Caption { get; set; }
+    [Parameter] public string? Delta { get; set; }
+    [Parameter] public bool DeltaUp { get; set; }
+    [Parameter] public bool Clickable { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

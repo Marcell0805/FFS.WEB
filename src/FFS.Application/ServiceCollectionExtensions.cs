@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GoalService>();
         services.AddSingleton<SimpleProjectionService>();
         services.AddSingleton<DashboardService>();
+        services.AddSingleton<CsvExportService>();
         return services;
     }
 }

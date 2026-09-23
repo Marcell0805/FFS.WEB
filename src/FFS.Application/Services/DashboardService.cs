@@ -1,4 +1,5 @@
 using FFS.Application.Models;
+using FFS.Domain;
 using FFS.Domain.Entities;
 using FFS.Domain.Enums;
 
@@ -22,6 +23,8 @@ public sealed class DashboardService
         var today = (asOf ?? DateTime.Today).Date;
         var (start, end) = DateRangePreset.ThisMonth.Resolve(today);
         var cash = _reporting.CashFlow(start, end);
+        var (prevStart, prevEnd) = CashFlowRules.SameDayCountPreviousMonth(today);
+        var previous = _reporting.CashFlow(prevStart, prevEnd);
         var trendStart = today.AddMonths(-5);
         trendStart = new DateTime(trendStart.Year, trendStart.Month, 1);
         var trend = _reporting.MonthlyTrend(trendStart, end);
@@ -30,12 +33,13 @@ public sealed class DashboardService
         var budget = _budget.GetCurrentMonthOverview(today);
         var goals = _goals.GetActiveGoals();
 
-        return new DashboardViewModel(cash, trend, spending, recent, budget, goals);
+        return new DashboardViewModel(cash, previous, trend, spending, recent, budget, goals);
     }
 }
 
 public record DashboardViewModel(
     CashFlowSummary ThisMonthCashFlow,
+    CashFlowSummary PreviousPeriodCashFlow,
     IReadOnlyList<MonthlyTrendPoint> CashFlowTrend,
     IReadOnlyList<CategoryTotal> TopSpending,
     IReadOnlyList<Transaction> RecentTransactions,

@@ -1,50 +1,133 @@
 @page "/goals"
+@page "/planning/goals"
+@page "/goal"
 @inject GoalService GoalSvc
 @inject NavigationManager Nav
 
 <PageTitle>@AppBrand.Name · Goals</PageTitle>
 
-<div class="page-hero">
-    <div class="eyebrow">Goals</div>
-    <h1>Progress toward what matters</h1>
-    <p>Click a goal to see contribution history and related money movement.</p>
-</div>
-
 @{
     var goals = GoalSvc.GetActiveGoals();
+    var behind = goals.Count(g => g.Goal.Progress < 0.5m && g.Goal.IsActive);
+    var onTrack = goals.Count(g => g.Goal.Progress >= 0.5m && g.Goal.Progress < 1);
+    var done = goals.Count(g => g.Goal.Progress >= 1);
+    var saved = goals.Sum(g => g.Goal.CurrentAmount);
+    var target = goals.Sum(g => g.Goal.TargetAmount);
+    var avg = goals.Count == 0 ? 0 : goals.Average(g => (double)g.Goal.Progress) * 100;
+    var visible = _goalFilter switch
+    {
+        "behind" => goals.Where(g => g.Goal.Progress < 0.5m).ToList(),
+        "done" => goals.Where(g => g.Goal.Progress >= 1).ToList(),
+        "track" => goals.Where(g => g.Goal.Progress >= 0.5m && g.Goal.Progress < 1).ToList(),
+        _ => goals.ToList()
+    };
 }
 
-<div class="grid-2">
-    @foreach (var g in goals)
-    {
-        var pct = g.Goal.Progress * 100;
-        <div class="card goal-card clickable-card" @onclick="() => OpenGoal(g.Goal.Id)">
-            <div class="goal-meta">
-                <h3 style="margin:0;">@g.Goal.Name</h3>
-                <span class="badge">@pct.ToString("0")%</span>
+<div class="page-hero">
+    <div>
+        <div class="eyebrow">Goals</div>
+        <h1>Progress toward what matters</h1>
+        <p>Click a goal to see contribution history and related money movement.</p>
+    </div>
+</div>
+
+<div class="kpi-grid kpi-4">
+    <KpiCard Label="Goals" Value="@goals.Count.ToString()" Icon="bi-bullseye" Tone="accent" Caption="@($"{onTrack} on track · {behind} behind")" />
+    <KpiCard Label="Total saved" Value="@MoneyFormat.Zar(saved)" Icon="bi-record-circle" Tone="error" />
+    <KpiCard Label="Combined target" Value="@MoneyFormat.Zar(target)" Icon="bi-flag" Tone="accent" />
+    <div class="stat-tile tone-neutral">
+        <div class="stat-head"><span class="stat-ico accent"><i class="bi bi-bar-chart"></i></span><span class="stat-lbl">Average progress</span></div>
+        <div class="stat-val">@avg.ToString("0")%</div>
+        <div class="progress"><span style="width:@avg.ToString("0.##")%"></span></div>
+    </div>
+</div>
+
+<div class="chip-row inset">
+    <button type="button" class="chip @(_goalFilter == "all" ? "active" : null)" @onclick="FilterAll">All goals</button>
+    <button type="button" class="chip @(_goalFilter == "track" ? "active" : null)" @onclick="FilterTrack">On track (@onTrack)</button>
+    <button type="button" class="chip @(_goalFilter == "behind" ? "active" : null)" @onclick="FilterBehind">Behind (@behind)</button>
+    <button type="button" class="chip @(_goalFilter == "done" ? "active" : null)" @onclick="FilterDone">Completed (@done)</button>
+</div>
+
+<div class="goals-split">
+    <div class="goal-stack">
+        @foreach (var g in visible)
+        {
+            var pct = g.Goal.Progress * 100;
+            var monthsLeft = g.Goal.TargetDate is DateTime td
+                ? Math.Max(1, (td.Year - DateTime.Today.Year) * 12 + td.Month - DateTime.Today.Month)
+                : 0;
+            var monthly = monthsLeft > 0 ? Math.Max(0, g.Goal.Remaining / monthsLeft) : 0;
+            var tone = pct >= 70 ? "success" : pct >= 50 ? "accent" : "error";
+            <div class="card goal-card-wide clickable-card" @onclick="() => OpenGoal(g.Goal.Id)">
+                <span class="goal-ico tone-@tone"><i class="bi @CategoryIcons.For(g.Goal.Name, g.Goal.IconName)"></i></span>
+                <div>
+                    <strong>@g.Goal.Name</strong>
+                    <p class="muted small">@(g.Goal.Description ?? "")</p>
+                    <div class="progress"><span class="@tone" style="width:@pct.ToString("0.##")%"></span></div>
+                    <div class="muted small">@MoneyFormat.Zar(g.Goal.CurrentAmount) of @MoneyFormat.Zar(g.Goal.TargetAmount) · @MoneyFormat.Zar(g.Goal.Remaining) remaining</div>
+                </div>
+                <div class="goal-side">
+                    <div class="stat-val @tone">@pct.ToString("0")%</div>
+                    <div class="muted small">Target date</div>
+                    <div>@(g.Goal.TargetDate?.ToString("MMMM yyyy") ?? "—")</div>
+                    @if (monthly > 0)
+                    {
+                        <div class="muted small" style="margin-top:0.65rem;">Monthly target</div>
+                        <div>@MoneyFormat.Zar(monthly)</div>
+                    }
+                </div>
             </div>
-            @if (!string.IsNullOrWhiteSpace(g.Goal.Description))
-            {
-                <p class="muted small">@g.Goal.Description</p>
-            }
-            <div class="kpi-value" style="font-size:1.35rem;">
-                @MoneyFormat.Zar(g.Goal.CurrentAmount)
-                <span class="muted" style="font-size:0.95rem; font-weight:500;"> / @MoneyFormat.Zar(g.Goal.TargetAmount)</span>
+        }
+        @if (visible.Count == 0)
+        {
+            <div class="card empty-state">No goals match this filter.</div>
+        }
+    </div>
+    <aside class="goal-insights">
+        <div class="card insight-card ok">
+            <i class="bi bi-graph-up-arrow"></i>
+            <div>
+                <strong>Great progress</strong>
+                <p class="muted small">Keep contributing — even small amounts compound.</p>
             </div>
-            <div class="progress"><span style="width:@pct.ToString("0.##")%"></span></div>
-            <div class="goal-meta muted small">
-                <span>Remaining @MoneyFormat.Zar(g.Goal.Remaining)</span>
-                <span>
-                    @(g.Goal.TargetDate.HasValue
-                        ? $"Target: {g.Goal.TargetDate:MMMM yyyy}"
-                        : "No target date")
-                </span>
-            </div>
-            <p class="muted small" style="margin-top:0.75rem;">Open details →</p>
         </div>
-    }
+        <div class="card insight-card ok">
+            <i class="bi bi-check-circle"></i>
+            <div>
+                <strong>@onTrack goals on track</strong>
+                <p class="muted small">Keep up the contributions.</p>
+            </div>
+        </div>
+        @if (behind > 0)
+        {
+            <div class="card insight-card warn">
+                <i class="bi bi-exclamation-circle"></i>
+                <div>
+                    <strong>@behind @(behind == 1 ? "goal" : "goals") behind</strong>
+                    <p class="muted small">Consider increasing the monthly contribution.</p>
+                </div>
+            </div>
+        }
+        <div class="card insight-card ok">
+            <i class="bi bi-lightbulb"></i>
+            <div>
+                <strong>Tip</strong>
+                <p class="muted small">Automate your savings. Even a small, regular contribution can make a big difference over time.</p>
+                <a class="text-link" href="planning">Open planning →</a>
+            </div>
+        </div>
+        <p class="muted small quote">“A goal without a plan is just a wish.”</p>
+    </aside>
 </div>
 
 @code {
+    private string _goalFilter = "all";
+
+    private void FilterAll() => _goalFilter = "all";
+    private void FilterTrack() => _goalFilter = "track";
+    private void FilterBehind() => _goalFilter = "behind";
+    private void FilterDone() => _goalFilter = "done";
+
     private void OpenGoal(long id) => Nav.NavigateTo($"goals/{id}");
 }

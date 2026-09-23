@@ -1,66 +1,75 @@
 ﻿@page "/"
 @inject DashboardService DashboardSvc
+@inject ReportingService ReportingSvc
 @inject IFinancialDataProvider Data
 @inject NavigationManager Nav
 @inject ThemeService Theme
 @implements IDisposable
+@using FFS.Domain
+@using FFS.Domain.Enums
 
-<PageTitle>@AppBrand.Name · Dashboard</PageTitle>
-
-<div class="page-hero dashboard-hero">
-    <h1>Know your money. Forecast your future.</h1>
-    <p class="dashboard-hero-desc">Desktop overview of this month’s cash flow, budget posture, goals and recent activity — click any summary to drill into details.</p>
-</div>
+<PageTitle>@AppBrand.Name · Home</PageTitle>
 
 @{
     var vm = DashboardSvc.GetDashboard();
     var cash = vm.ThisMonthCashFlow;
+    var prev = vm.PreviousPeriodCashFlow;
+    var showCompare = prev.TransactionCount > 0;
     var (monthStart, monthEnd) = DateRangePreset.ThisMonth.Resolve();
+    var needs = vm.Budget.Buckets.FirstOrDefault(b => b.Bucket == BudgetBucketKind.Needs);
+    var wants = vm.Budget.Buckets.FirstOrDefault(b => b.Bucket == BudgetBucketKind.Wants);
+    var savings = vm.Budget.Buckets.FirstOrDefault(b => b.Bucket == BudgetBucketKind.Savings);
+    var hasBudget = vm.Budget.Buckets.Count > 0 && vm.Budget.Buckets.Sum(b => b.Planned) > 0;
+    var inDelta = showCompare ? CashFlowRules.VsLastDelta(cash.MoneyIn, prev.MoneyIn) : null;
+    var outDelta = showCompare ? CashFlowRules.VsLastDelta(cash.MoneyOut, prev.MoneyOut) : null;
+    var netDelta = showCompare ? CashFlowRules.VsLastDelta(cash.Net, prev.Net) : null;
 }
 
+<div class="page-hero">
+    <div>
+        <h1>@Greeting()</h1>
+        <p>Here’s your financial overview for @monthStart.ToString("MMMM yyyy").</p>
+    </div>
+    <div class="hero-meta">
+        <span class="pill"><i class="bi bi-calendar3"></i> @monthStart.ToString("d MMM yyyy") – @monthEnd.ToString("d MMM yyyy")</span>
+    </div>
+</div>
+
 <div class="kpi-grid">
-    <div class="kpi-card clickable-card" @onclick="DrillMoneyIn">
-        <div class="kpi-label">Money In</div>
-        <div class="kpi-value positive">@MoneyFormat.Zar(cash.MoneyIn)</div>
-        <div class="muted small">This month · click to explore →</div>
-    </div>
-    <div class="kpi-card clickable-card" @onclick="DrillMoneyOut">
-        <div class="kpi-label">Money Out</div>
-        <div class="kpi-value negative">@MoneyFormat.Zar(cash.MoneyOut)</div>
-        <div class="muted small">Spending &amp; outflows →</div>
-    </div>
-    <div class="kpi-card clickable-card" @onclick="DrillThisMonth">
-        <div class="kpi-label">Net Cash Flow</div>
-        <div class="kpi-value @(cash.Net >= 0 ? "positive" : "negative")">@MoneyFormat.Zar(cash.Net)</div>
-        <div class="muted small">@cash.TransactionCount counted transactions →</div>
-    </div>
+    <KpiCard Label="Money in" Value="@MoneyFormat.Zar(cash.MoneyIn)" Icon="bi-arrow-up" Tone="success"
+             Delta="@(inDelta?.Text)" DeltaUp="@(inDelta?.Change >= 0)"
+             Caption="@($"{cash.TransactionCount} transactions")" Clickable="true" OnClick="DrillMoneyIn" />
+    <KpiCard Label="Money out" Value="@MoneyFormat.Zar(cash.MoneyOut)" Icon="bi-arrow-down" Tone="error"
+             Delta="@(outDelta?.Text)" DeltaUp="@(outDelta?.Change >= 0)"
+             Caption="@(showCompare ? "vs last month" : "This month")" Clickable="true" OnClick="DrillMoneyOut" />
+    <KpiCard Label="Net cash flow" Value="@MoneyFormat.Zar(cash.Net)" Icon="bi-bar-chart" Tone="accent"
+             Delta="@(netDelta?.Text)" DeltaUp="@(netDelta?.Change >= 0)"
+             Caption="@(cash.Net >= 0 ? "You're cash positive this month." : "Cash negative this month.")"
+             Clickable="true" OnClick="DrillThisMonth" />
 </div>
 
 <div class="grid-2">
     <div class="card">
         <div class="card-header">
-            <h3>Cash flow trend</h3>
-            <span class="muted small">Last 6 months</span>
+            <div>
+                <h3><i class="bi bi-activity"></i> Cash flow trend</h3>
+                <p class="muted small">Income vs expenses over the last 6 months.</p>
+            </div>
+            <span class="pill quiet">Last 6 months</span>
         </div>
-        <ApexChart @key="@($"dash-trend-{Theme.IsDark}")" TItem="MonthlyTrendPoint" Height="280" Options="_trendOptions">
-            <ApexPointSeries TItem="MonthlyTrendPoint"
-                             Items="vm.CashFlowTrend"
-                             Name="Money In"
-                             SeriesType="SeriesType.Area"
-                             XValue="@(e => e.Month)"
-                             YValue="@(e => e.MoneyIn)" />
-            <ApexPointSeries TItem="MonthlyTrendPoint"
-                             Items="vm.CashFlowTrend"
-                             Name="Money Out"
-                             SeriesType="SeriesType.Area"
-                             XValue="@(e => e.Month)"
-                             YValue="@(e => e.MoneyOut)" />
+        <ApexChart @key="@($"home-trend-{Theme.IsDark}")" TItem="MonthlyTrendPoint" Height="260" Options="_trendOptions">
+            <ApexPointSeries TItem="MonthlyTrendPoint" Items="vm.CashFlowTrend" Name="Money In" SeriesType="SeriesType.Line"
+                             XValue="@(e => e.Month)" YValue="@(e => e.MoneyIn)" />
+            <ApexPointSeries TItem="MonthlyTrendPoint" Items="vm.CashFlowTrend" Name="Money Out" SeriesType="SeriesType.Line"
+                             XValue="@(e => e.Month)" YValue="@(e => e.MoneyOut)" />
         </ApexChart>
     </div>
     <div class="card">
         <div class="card-header">
-            <h3>Spending summary</h3>
-            <span class="muted small">This month · click a category</span>
+            <div>
+                <h3><i class="bi bi-pie-chart"></i> Spending by category</h3>
+            </div>
+            <span class="pill quiet">This month</span>
         </div>
         @if (vm.TopSpending.Count == 0)
         {
@@ -68,73 +77,105 @@
         }
         else
         {
-            @foreach (var row in vm.TopSpending)
-            {
-                <div class="list-row clickable" @onclick="() => DrillCategory(row, monthStart, monthEnd)">
-                    <span>@row.CategoryName</span>
-                    <span class="amount out">@MoneyFormat.Zar(row.Total)</span>
+            <div class="donut-split">
+                <ApexChart @key="@($"home-donut-{Theme.IsDark}")" TItem="CategoryTotal" Height="220" Options="_donutOptions">
+                    <ApexPointSeries TItem="CategoryTotal" Items="vm.TopSpending" Name="Spend" SeriesType="SeriesType.Donut"
+                                     XValue="@(e => e.CategoryName)" YValue="@(e => e.Total)" />
+                </ApexChart>
+                <div class="legend-list">
+                    @{ var i = 0; }
+                    @foreach (var row in vm.TopSpending)
+                    {
+                        var pct = cash.MoneyOut <= 0 ? 0 : (row.Total / cash.MoneyOut) * 100;
+                        <div class="legend-row clickable" @onclick="() => DrillCategory(row, monthStart, monthEnd)">
+                            <span class="swatch s-@i"></span>
+                            <span>@row.CategoryName</span>
+                            <span class="muted">@pct.ToString("0")%</span>
+                            <span class="amount out">@MoneyFormat.Zar(row.Total)</span>
+                        </div>
+                        i++;
+                    }
                 </div>
-            }
+            </div>
         }
     </div>
 </div>
 
 <div class="grid-3">
     <div class="card">
-        <h3>Budget snapshot</h3>
-        <div class="list-row"><span>Income target</span><span class="amount">@MoneyFormat.Zar(vm.Budget.IncomeTarget)</span></div>
-        <div class="list-row"><span>Actual income</span><span class="amount in">@MoneyFormat.Zar(vm.Budget.ActualIncome)</span></div>
-        @foreach (var b in vm.Budget.Buckets)
+        <div class="card-header">
+            <h3><i class="bi bi-bullseye"></i> Budget snapshot</h3>
+            <a class="text-link" href="planning">View planning →</a>
+        </div>
+        @if (!hasBudget)
         {
-            <div class="list-row">
-                <span>@b.Bucket</span>
-                <span class="amount">@MoneyFormat.ZarCompact(b.Actual) / @MoneyFormat.ZarCompact(b.Planned)</span>
-            </div>
+            <p>Create a Needs / Wants / Savings budget</p>
         }
-        <a class="small" href="planning">Open planning →</a>
+        else
+        {
+            @foreach (var b in new[] { needs, wants, savings })
+            {
+                if (b is null) continue;
+                var used = b.Planned <= 0 ? 0 : Math.Clamp((double)(b.Actual / b.Planned) * 100, 0, 100);
+                <div class="snap-row">
+                    <span>@b.Bucket</span>
+                    <div class="progress slim"><span style="width:@used.ToString("0.##")%"></span></div>
+                    <span class="muted small">@used.ToString("0")% · @MoneyFormat.ZarCompact(b.Actual) / @MoneyFormat.ZarCompact(b.Planned)</span>
+                </div>
+            }
+        }
     </div>
     <div class="card">
-        <h3>Active goals</h3>
+        <div class="card-header">
+            <h3><i class="bi bi-flag"></i> Active goals</h3>
+            <a class="text-link" href="goals">View goals →</a>
+        </div>
         @foreach (var g in vm.Goals.Take(3))
         {
-            <div class="clickable" style="margin-bottom:0.9rem;" @onclick="() => OpenGoal(g.Goal.Id)">
-                <div class="goal-meta">
-                    <strong>@g.Goal.Name</strong>
-                    <span>@((g.Goal.Progress * 100).ToString("0"))%</span>
-                </div>
-                <div class="progress"><span style="width:@((g.Goal.Progress * 100).ToString("0.##"))%"></span></div>
-                <div class="muted small">@MoneyFormat.ZarCompact(g.Goal.CurrentAmount) / @MoneyFormat.ZarCompact(g.Goal.TargetAmount)</div>
+            var pct = g.Goal.Progress * 100;
+            <div class="snap-row clickable" @onclick="() => OpenGoal(g.Goal.Id)">
+                <span>@g.Goal.Name</span>
+                <div class="progress slim"><span style="width:@pct.ToString("0.##")%"></span></div>
+                <span class="muted small">@pct.ToString("0")% · @MoneyFormat.ZarCompact(g.Goal.CurrentAmount) / @MoneyFormat.ZarCompact(g.Goal.TargetAmount)</span>
             </div>
         }
-        <a class="small" href="goals">View goals →</a>
+        @if (vm.Goals.Count == 0)
+        {
+            <p class="muted">No active goals yet. Add one under Planning.</p>
+        }
     </div>
     <div class="card">
-        <h3>Accounts</h3>
+        <div class="card-header">
+            <h3><i class="bi bi-bank"></i> Accounts</h3>
+            <a class="text-link" href="transactions">View all →</a>
+        </div>
         @foreach (var a in Data.Accounts.Where(x => x.IsActive))
         {
+            var bal = ReportingSvc.AccountBalance(a.Id);
             <div class="list-row clickable" @onclick="() => OpenAccount(a.Id)">
                 <div>
                     <div>@a.Name</div>
                     <div class="muted small">@a.InstitutionName · @a.AccountType</div>
                 </div>
+                <span class="amount @(bal >= 0 ? "in" : "out")">@MoneyFormat.Zar(bal)</span>
             </div>
         }
     </div>
 </div>
 
-<div class="card" style="margin-top:1rem;">
+<div class="card">
     <div class="card-header">
-        <h3>Recent transactions</h3>
-        <a class="small" href="transactions">View all →</a>
+        <h3><i class="bi bi-clock-history"></i> Recent transactions</h3>
+        <a class="text-link" href="transactions">View all →</a>
     </div>
     <div class="table-wrap">
-        <table class="data">
+        <table class="data dense">
             <thead>
                 <tr>
                     <th>Date</th>
                     <th>Merchant</th>
-                    <th>Bank</th>
                     <th>Category</th>
+                    <th>Account</th>
                     <th>Direction</th>
                     <th>Amount</th>
                 </tr>
@@ -142,15 +183,15 @@
             <tbody>
                 @foreach (var t in vm.RecentTransactions)
                 {
-                    var cat = Data.Categories.FirstOrDefault(c => c.Id == t.CategoryId)?.Name ?? "—";
-                    var bank = Data.Accounts.FirstOrDefault(a => a.Id == t.AccountId)?.InstitutionName ?? "—";
-                    <tr class="clickable" @onclick="() => OpenMerchant(t.Merchant)">
-                        <td>@t.TransactionDate.ToString("dd MMM")</td>
+                    var cat = Data.Categories.FirstOrDefault(c => c.Id == t.CategoryId);
+                    var acc = Data.Accounts.FirstOrDefault(a => a.Id == t.AccountId);
+                    <tr class="clickable" @onclick="() => OpenTxn(t.Id)">
+                        <td>@t.TransactionDate.ToString("d MMM yyyy")</td>
                         <td>@t.Merchant</td>
-                        <td>@bank</td>
-                        <td>@cat</td>
-                        <td><span class="badge @t.Direction.ToString().ToLowerInvariant()">@t.Direction</span></td>
-                        <td class="amount @CssAmount(t.Direction)">@MoneyFormat.Zar(t.Amount)</td>
+                        <td>@(cat?.Name ?? "—")</td>
+                        <td>@(acc?.Name ?? "—")</td>
+                        <td><span class="dir @t.Direction.ToString().ToLowerInvariant()">@LabelDir(t.Direction)</span></td>
+                        <td class="amount @CssAmount(t.Direction)">@Signed(t)</td>
                     </tr>
                 }
             </tbody>
@@ -160,32 +201,37 @@
 
 @code {
     private ApexChartOptions<MonthlyTrendPoint> _trendOptions = null!;
+    private ApexChartOptions<CategoryTotal> _donutOptions = null!;
 
     protected override void OnInitialized()
     {
         Theme.Changed += OnThemeChanged;
-        RebuildTrendOptions();
+        RebuildCharts();
     }
 
     private void OnThemeChanged()
     {
-        RebuildTrendOptions();
+        RebuildCharts();
         InvokeAsync(StateHasChanged);
     }
 
-    private void RebuildTrendOptions()
+    private void RebuildCharts()
     {
         _trendOptions = ChartThemeOptions.Create<MonthlyTrendPoint>(Theme.IsDark, o =>
         {
-            o.Stroke = new Stroke { Curve = Curve.Smooth, Width = 2 };
+            o.Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 };
             o.DataLabels = new DataLabels { Enabled = false };
-            o.Colors = ["#0f766e", "#dc2626"];
-            o.Legend!.Position = LegendPosition.Top;
-            if (o.Yaxis is { Count: > 0 })
+            o.Colors = ["#2dd4bf", "#fb7185"];
+            o.Legend!.Position = LegendPosition.Bottom;
+        });
+        _donutOptions = ChartThemeOptions.Create<CategoryTotal>(Theme.IsDark, o =>
+        {
+            if (o.PlotOptions?.Pie?.Donut?.Labels?.Total is { } total)
             {
-                o.Yaxis[0].Labels ??= new YAxisLabels();
-                o.Yaxis[0].Labels.Formatter = @"function(val){ return 'R' + Number(val).toLocaleString('en-ZA'); }";
+                total.Show = true;
+                total.Label = "Total spent";
             }
+            o.Legend = new Legend { Show = false };
         });
     }
 
@@ -207,13 +253,6 @@
         Nav.NavigateTo($"transactions?from={start:yyyy-MM-dd}&to={end:yyyy-MM-dd}");
     }
 
-    private void OpenGoal(long id) => Nav.NavigateTo($"goals/{id}");
-
-    private void OpenAccount(long id) => Nav.NavigateTo($"transactions?accountId={id}");
-
-    private void OpenMerchant(string merchant) =>
-        Nav.NavigateTo($"transactions?search={Uri.EscapeDataString(merchant)}");
-
     private void DrillCategory(CategoryTotal row, DateTime start, DateTime end)
     {
         var q = $"from={start:yyyy-MM-dd}&to={end:yyyy-MM-dd}&direction=MoneyOut";
@@ -221,11 +260,35 @@
         Nav.NavigateTo($"transactions?{q}");
     }
 
+    private void OpenGoal(long id) => Nav.NavigateTo($"goals/{id}");
+    private void OpenAccount(long id) => Nav.NavigateTo($"transactions?accountId={id}");
+    private void OpenTxn(long id) => Nav.NavigateTo($"transactions?open={id}");
+
+    private static string Greeting()
+    {
+        var hour = DateTime.Now.Hour;
+        return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    }
+
+    private static string LabelDir(MoneyDirection d) => d switch
+    {
+        MoneyDirection.MoneyIn => "Money in",
+        MoneyDirection.MoneyOut => "Money out",
+        _ => "Transfer"
+    };
+
     private static string CssAmount(MoneyDirection d) => d switch
     {
         MoneyDirection.MoneyIn => "in",
         MoneyDirection.MoneyOut => "out",
         _ => "transfer"
+    };
+
+    private static string Signed(FFS.Domain.Entities.Transaction t) => t.Direction switch
+    {
+        MoneyDirection.MoneyIn => $"+{MoneyFormat.Zar(t.Amount)}",
+        MoneyDirection.MoneyOut => $"-{MoneyFormat.Zar(t.Amount)}",
+        _ => MoneyFormat.Zar(t.Amount)
     };
 
     public void Dispose() => Theme.Changed -= OnThemeChanged;

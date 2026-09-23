@@ -42,11 +42,11 @@ public static class DateRangePresetExtensions
 
     public static string DisplayName(this DateRangePreset preset) => preset switch
     {
-        DateRangePreset.ThisMonth => "This Month",
-        DateRangePreset.PreviousMonth => "Previous Month",
-        DateRangePreset.Last3Months => "Last 3 Months",
-        DateRangePreset.Last6Months => "Last 6 Months",
-        DateRangePreset.Last12Months => "Last 12 Months",
+        DateRangePreset.ThisMonth => "This month",
+        DateRangePreset.PreviousMonth => "Previous month",
+        DateRangePreset.Last3Months => "Last 3 months",
+        DateRangePreset.Last6Months => "Last 6 months",
+        DateRangePreset.Last12Months => "Last 12 months",
         _ => preset.ToString()
     };
 }

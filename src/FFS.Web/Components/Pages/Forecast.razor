@@ -6,66 +6,77 @@
 <PageTitle>@AppBrand.Name · Forecast</PageTitle>
 
 <div class="page-hero">
-    <div class="eyebrow">Forecast</div>
-    <h1>Simple Projection</h1>
-    <p>An experimental average-based outlook — not the final @AppBrand.Name forecasting engine.</p>
+    <div>
+        <div class="eyebrow">Forecast</div>
+        <h1>Simple Projection</h1>
+        <p>An experimental average-based outlook — not the final @AppBrand.Name forecasting engine.</p>
+    </div>
+    <div class="hero-meta">
+        <span class="pill"><i class="bi bi-calendar3"></i> @DateTime.Today.ToString("MMM yyyy") – @DateTime.Today.AddMonths(_months).ToString("MMM yyyy")</span>
+    </div>
 </div>
 
 <div class="notice">
-    <strong>Simple Projection</strong> — projected figures use the average of recent Money In / Money Out
-    (last ~3 months, excluding transfers and ignored transactions). This is a learning prototype, not an intelligent prediction.
+    <i class="bi bi-exclamation-triangle"></i>
+    Simple Projection — projected figures use the average of recent Money In / Money Out
+    (last 3 months, excluding transfers and ignored transactions). This is a learning prototype, not an intelligent prediction.
 </div>
 
-<div class="preset-row">
-    @foreach (var m in new[] { 3, 6, 12 })
-    {
-        <button type="button" class="@(_months == m ? "active" : null)" @onclick="() => SetMonths(m)">@m months</button>
-    }
+<div class="kpi-grid kpi-5">
+    <KpiCard Label="Current balance (est.)" Value="@MoneyFormat.Zar(_result.CurrentBalance)" Icon="bi-wallet2" Caption="@($"As of {DateTime.Today:d MMM yyyy}")" />
+    <KpiCard Label="Avg monthly income" Value="@MoneyFormat.Zar(_result.AvgMonthlyIncome)" Icon="bi-arrow-up" Tone="success" Caption="Based on last 3 months" />
+    <KpiCard Label="Avg monthly expenses" Value="@MoneyFormat.Zar(_result.AvgMonthlyExpenses)" Icon="bi-arrow-down" Tone="error" Caption="Based on last 3 months" />
+    <KpiCard Label="@($"Projected balance ({_months} mo)")" Value="@MoneyFormat.Zar(_result.ProjectedBalance)" Icon="bi-graph-up-arrow" Tone="accent" Caption="If trend continues" />
+    <KpiCard Label="Projection period" Value="@($"{_months} months")" Icon="bi-calendar3" Caption="@($"{DateTime.Today:MMM yyyy} – {DateTime.Today.AddMonths(_months):MMM yyyy}")" />
 </div>
 
-<div class="kpi-grid">
-    <div class="kpi-card">
-        <div class="kpi-label">Current balance (est.)</div>
-        <div class="kpi-value">@MoneyFormat.Zar(_result.CurrentBalance)</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Avg monthly income</div>
-        <div class="kpi-value positive">@MoneyFormat.Zar(_result.AvgMonthlyIncome)</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Avg monthly expenses</div>
-        <div class="kpi-value negative">@MoneyFormat.Zar(_result.AvgMonthlyExpenses)</div>
-    </div>
-</div>
-
-<div class="grid-3" style="margin-bottom:1rem;">
+<div class="grid-2">
     <div class="card">
-        <div class="kpi-label">Projected income (@_months mo)</div>
-        <div class="kpi-value positive" style="font-size:1.4rem;">@MoneyFormat.Zar(_result.ProjectedIncome)</div>
-    </div>
-    <div class="card">
-        <div class="kpi-label">Projected expenses (@_months mo)</div>
-        <div class="kpi-value negative" style="font-size:1.4rem;">@MoneyFormat.Zar(_result.ProjectedExpenses)</div>
+        <div class="card-header">
+            <div>
+                <h3><i class="bi bi-graph-up"></i> Projected balance path</h3>
+                <p class="muted small">Estimated account balance over the next @_months months using average cash flow.</p>
+            </div>
+            <div class="chip-row under-title" style="margin:0;">
+                <button type="button" class="chip @(_months == 3 ? "active" : null)" @onclick="Months3">3</button>
+                <button type="button" class="chip @(_months == 6 ? "active" : null)" @onclick="Months6">6</button>
+                <button type="button" class="chip @(_months == 12 ? "active" : null)" @onclick="Months12">12</button>
+            </div>
+        </div>
+        <ApexChart @key="@($"proj-{_chartKey}-{Theme.IsDark}")" TItem="ProjectionPoint" Height="300" Options="_chartOptions">
+            <ApexPointSeries TItem="ProjectionPoint" Items="_result.Points.ToList()" Name="Projected balance"
+                             SeriesType="SeriesType.Line" XValue="@(e => e.Label)" YValue="@(e => e.Balance)" />
+        </ApexChart>
     </div>
     <div class="card">
-        <div class="kpi-label">Projected balance</div>
-        <div class="kpi-value @(_result.ProjectedBalance >= 0 ? "positive" : "negative")" style="font-size:1.4rem;">@MoneyFormat.Zar(_result.ProjectedBalance)</div>
+        <h3><i class="bi bi-sliders"></i> Projection assumptions</h3>
+        <div class="list-row"><span>Income method</span><span>Average (last 3 months)</span></div>
+        <div class="list-row"><span>Expense method</span><span>Average (last 3 months)</span></div>
+        <div class="list-row"><span>Include transfers</span><span>No</span></div>
+        <div class="list-row"><span>Include ignored transactions</span><span>No</span></div>
+        <div class="list-row"><span>Projection period</span><span>@_months months</span></div>
+        <div class="list-row"><span>Starting balance</span><span>@MoneyFormat.Zar(_result.CurrentBalance)</span></div>
     </div>
 </div>
 
-<div class="card">
-    <div class="card-header">
-        <h3>Projected balance path</h3>
-        <span class="muted small">Simple Projection · @_months months</span>
+<div class="grid-3" style="margin-top:1rem;">
+    <div class="card">
+        <h3><i class="bi bi-lightbulb"></i> What this could mean</h3>
+        <p class="muted small">Positive trend — your projected balance is increasing by @MoneyFormat.Zar(_result.AvgMonthlyIncome - _result.AvgMonthlyExpenses) per month.</p>
+        <p class="muted small">Build momentum — if current habits continue, you could reach @MoneyFormat.Zar(_result.ProjectedBalance) in @_months months.</p>
     </div>
-    <ApexChart @key="@($"proj-{_chartKey}-{Theme.IsDark}")" TItem="ProjectionPoint" Height="340" Options="_chartOptions">
-        <ApexPointSeries TItem="ProjectionPoint"
-                         Items="_result.Points.ToList()"
-                         Name="Projected balance"
-                         SeriesType="SeriesType.Area"
-                         XValue="@(e => e.Label)"
-                         YValue="@(e => e.Balance)" />
-    </ApexChart>
+    <div class="card">
+        <h3><i class="bi bi-bar-chart"></i> Key numbers</h3>
+        <div class="list-row"><span>Total projected income</span><span class="amount in">@MoneyFormat.Zar(_result.ProjectedIncome)</span></div>
+        <div class="list-row"><span>Total projected expenses</span><span class="amount out">@MoneyFormat.Zar(_result.ProjectedExpenses)</span></div>
+        <div class="list-row"><span>Projected net cash flow</span><span class="amount in">@MoneyFormat.Zar(_result.ProjectedIncome - _result.ProjectedExpenses)</span></div>
+        <div class="list-row"><span>Projected end balance</span><span class="amount">@MoneyFormat.Zar(_result.ProjectedBalance)</span></div>
+    </div>
+    <div class="card">
+        <h3><i class="bi bi-info-circle"></i> Keep in mind</h3>
+        <p class="muted small">This is a learning prototype. The forecast uses simple averages and does not account for seasonality or irregular charges.</p>
+        <p class="muted small">Not financial advice — these projections are for informational purposes only.</p>
+    </div>
 </div>
 
 @code {
@@ -87,6 +98,10 @@
         InvokeAsync(StateHasChanged);
     }
 
+    private void Months3() => SetMonths(3);
+    private void Months6() => SetMonths(6);
+    private void Months12() => SetMonths(12);
+
     private void SetMonths(int months)
     {
         _months = months;
@@ -106,12 +121,8 @@
         {
             o.Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 };
             o.DataLabels = new DataLabels { Enabled = false };
-            o.Colors = ["#38bdf8"];
-            if (o.Yaxis is { Count: > 0 })
-            {
-                o.Yaxis[0].Labels ??= new YAxisLabels();
-                o.Yaxis[0].Labels.Formatter = @"function(val){ return 'R' + Number(val).toLocaleString('en-ZA'); }";
-            }
+            o.Colors = ["#2dd4bf"];
+            o.Markers = new Markers { Size = 4 };
         });
     }
 

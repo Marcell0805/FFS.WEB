@@ -1,152 +1,162 @@
 @page "/reports"
 @inject ReportingService ReportingSvc
+@inject BudgetService BudgetSvc
+@inject CsvExportService Export
 @inject NavigationManager Nav
 @inject ThemeService Theme
+@inject IJSRuntime Js
 @implements IDisposable
+@using FFS.Domain
+@using FFS.Domain.Enums
 
 <PageTitle>@AppBrand.Name · Reports</PageTitle>
 
 <div class="page-hero">
-    <div class="eyebrow">Reports</div>
-    <h1>Analyse the numbers</h1>
-    <p>Income, spending and merchant patterns using the same cash-flow rules as FFS Mobile.</p>
+    <div>
+        <div class="eyebrow">Reports</div>
+        <h1>Analyse the numbers</h1>
+        <p>Income, spending and merchant patterns using the same cash-flow rules as FFS Mobile.</p>
+    </div>
+    <div class="hero-meta">
+        <span class="pill"><i class="bi bi-calendar3"></i> @_start.ToString("d MMM yyyy") – @_end.ToString("d MMM yyyy")</span>
+        <button type="button" class="secondary" @onclick="DownloadExport"><i class="bi bi-download"></i> Export</button>
+    </div>
 </div>
 
-<div class="preset-row">
+<div class="chip-row inset">
     @foreach (var p in Enum.GetValues<DateRangePreset>())
     {
-        <button type="button" class="@(_preset == p ? "active" : null)" @onclick="() => SetPreset(p)">@p.DisplayName()</button>
+        <button type="button" class="chip @(_preset == p ? "active" : null)" @onclick="() => SetPreset(p)">@p.DisplayName()</button>
     }
 </div>
-<p class="muted small" style="margin-top:-0.5rem; margin-bottom:1rem;">
-    Showing @_start.ToString("dd MMM yyyy") → @_end.ToString("dd MMM yyyy")
-</p>
 
 <div class="kpi-grid">
-    <div class="kpi-card clickable-card" @onclick="DrillIncome">
-        <div class="kpi-label">Income</div>
-        <div class="kpi-value positive">@MoneyFormat.Zar(_cash.MoneyIn)</div>
-        <div class="muted small">Click to view Money In →</div>
-    </div>
-    <div class="kpi-card clickable-card" @onclick="DrillSpending">
-        <div class="kpi-label">Spending</div>
-        <div class="kpi-value negative">@MoneyFormat.Zar(_cash.MoneyOut)</div>
-        <div class="muted small">Click to view Money Out →</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Net</div>
-        <div class="kpi-value @(_cash.Net >= 0 ? "positive" : "negative")">@MoneyFormat.Zar(_cash.Net)</div>
-    </div>
+    <KpiCard Label="Income" Value="@MoneyFormat.Zar(_cash.MoneyIn)" Icon="bi-arrow-up" Tone="success"
+             Delta="@_inDelta" DeltaUp="@_inUp" Caption="@($"{_cash.TransactionCount} transactions")" Clickable="true" OnClick="DrillIncome" />
+    <KpiCard Label="Spending" Value="@MoneyFormat.Zar(_cash.MoneyOut)" Icon="bi-arrow-down" Tone="error"
+             Delta="@_outDelta" DeltaUp="@_outUp" Caption="vs previous period" Clickable="true" OnClick="DrillSpending" />
+    <KpiCard Label="Net cash flow" Value="@MoneyFormat.Zar(_cash.Net)" Icon="bi-diagram-3" Tone="accent"
+             Delta="@_netDelta" DeltaUp="@_netUp" Caption="@($"{_cash.TransactionCount} transactions")" />
 </div>
 
 <div class="grid-2">
     <div class="card">
-        <h3>Income vs Spending</h3>
-        <ApexChart @key="@($"ivs-{_chartKey}-{Theme.IsDark}")" TItem="NamedValue" Height="280" Options="DarkAwareOptions<NamedValue>()">
-            <ApexPointSeries TItem="NamedValue"
-                             Items="_incomeVsSpend"
-                             Name="Total"
-                             SeriesType="SeriesType.Bar"
-                             XValue="@(e => e.Name)"
-                             YValue="@(e => e.Value)" />
+        <div class="card-header">
+            <div>
+                <h3><i class="bi bi-bar-chart"></i> Income vs Spending</h3>
+                <p class="muted small">Monthly totals over the selected period.</p>
+            </div>
+        </div>
+        <ApexChart @key="@($"ivs-{_chartKey}-{Theme.IsDark}")" TItem="MonthlyTrendPoint" Height="260" Options="DarkAwareOptions<MonthlyTrendPoint>()">
+            <ApexPointSeries TItem="MonthlyTrendPoint" Items="_monthly" Name="Money In" SeriesType="SeriesType.Bar"
+                             XValue="@(e => e.Month)" YValue="@(e => e.MoneyIn)" />
+            <ApexPointSeries TItem="MonthlyTrendPoint" Items="_monthly" Name="Money Out" SeriesType="SeriesType.Bar"
+                             XValue="@(e => e.Month)" YValue="@(e => e.MoneyOut)" />
         </ApexChart>
     </div>
     <div class="card">
-        <h3>Daily / period cash flow</h3>
-        <ApexChart @key="@($"daily-{_chartKey}-{Theme.IsDark}")" TItem="DailyCashFlowPoint" Height="280" Options="DarkAwareOptions<DailyCashFlowPoint>()">
-            <ApexPointSeries TItem="DailyCashFlowPoint"
-                             Items="_daily"
-                             Name="Money In"
-                             SeriesType="SeriesType.Line"
-                             XValue="@(e => e.Label)"
-                             YValue="@(e => e.MoneyIn)" />
-            <ApexPointSeries TItem="DailyCashFlowPoint"
-                             Items="_daily"
-                             Name="Money Out"
-                             SeriesType="SeriesType.Line"
-                             XValue="@(e => e.Label)"
-                             YValue="@(e => e.MoneyOut)" />
+        <div class="card-header">
+            <div>
+                <h3><i class="bi bi-activity"></i> Daily cash flow</h3>
+                <p class="muted small">Income vs expenses by day.</p>
+            </div>
+        </div>
+        <ApexChart @key="@($"daily-{_chartKey}-{Theme.IsDark}")" TItem="DailyCashFlowPoint" Height="260" Options="DarkAwareOptions<DailyCashFlowPoint>()">
+            <ApexPointSeries TItem="DailyCashFlowPoint" Items="_daily" Name="Money In" SeriesType="SeriesType.Line"
+                             XValue="@(e => e.Label)" YValue="@(e => e.MoneyIn)" />
+            <ApexPointSeries TItem="DailyCashFlowPoint" Items="_daily" Name="Money Out" SeriesType="SeriesType.Line"
+                             XValue="@(e => e.Label)" YValue="@(e => e.MoneyOut)" />
         </ApexChart>
     </div>
 </div>
 
-<div class="grid-2">
+<div class="grid-3 reports-bottom">
     <div class="card">
-        <h3>Monthly income / spending trend</h3>
-        <ApexChart @key="@($"monthly-{_chartKey}-{Theme.IsDark}")" TItem="MonthlyTrendPoint" Height="300" Options="DarkAwareOptions<MonthlyTrendPoint>()">
-            <ApexPointSeries TItem="MonthlyTrendPoint"
-                             Items="_monthly"
-                             Name="Money In"
-                             SeriesType="SeriesType.Bar"
-                             XValue="@(e => e.Month)"
-                             YValue="@(e => e.MoneyIn)" />
-            <ApexPointSeries TItem="MonthlyTrendPoint"
-                             Items="_monthly"
-                             Name="Money Out"
-                             SeriesType="SeriesType.Bar"
-                             XValue="@(e => e.Month)"
-                             YValue="@(e => e.MoneyOut)" />
-        </ApexChart>
-    </div>
-    <div class="card">
-        <h3>Spending by category</h3>
-        <p class="muted small">Click a category row below the chart to drill into transactions.</p>
-        <ApexChart @key="@($"cat-{_chartKey}-{Theme.IsDark}")" TItem="CategoryTotal" Height="260" Options="DarkAwareOptions<CategoryTotal>()">
-            <ApexPointSeries TItem="CategoryTotal"
-                             Items="_byCategory"
-                             Name="Spend"
-                             SeriesType="SeriesType.Donut"
-                             XValue="@(e => e.CategoryName)"
-                             YValue="@(e => e.Total)" />
-        </ApexChart>
-        @foreach (var row in _byCategory.Take(8))
+        <div class="card-header">
+            <div>
+                <h3><i class="bi bi-pie-chart"></i> Spending by category</h3>
+                <p class="muted small">Click a category to filter transactions.</p>
+            </div>
+        </div>
+        @if (_byCategory.Count == 0)
         {
-            <div class="list-row clickable" @onclick="() => DrillCategory(row)">
-                <span>@row.CategoryName</span>
-                <span class="amount out">@MoneyFormat.Zar(row.Total)</span>
+            <p class="muted">No spending in this period.</p>
+        }
+        else
+        {
+            <div class="donut-split">
+                <ApexChart @key="@($"cat-{_chartKey}-{Theme.IsDark}")" TItem="CategoryTotal" Height="200" Options="DonutOptions()">
+                    <ApexPointSeries TItem="CategoryTotal" Items="_byCategory" Name="Spend" SeriesType="SeriesType.Donut"
+                                     XValue="@(e => e.CategoryName)" YValue="@(e => e.Total)" />
+                </ApexChart>
+                <div class="legend-list">
+                    @{ var i = 0; }
+                    @foreach (var row in _byCategory.Take(6))
+                    {
+                        var pct = _cash.MoneyOut <= 0 ? 0 : (row.Total / _cash.MoneyOut) * 100;
+                        <div class="legend-row clickable" @onclick="() => DrillCategory(row)">
+                            <span class="swatch s-@i"></span>
+                            <span>@row.CategoryName</span>
+                            <span class="muted">@pct.ToString("0")%</span>
+                            <span class="amount out">@MoneyFormat.Zar(row.Total)</span>
+                        </div>
+                        i++;
+                    }
+                </div>
             </div>
         }
     </div>
-</div>
-
-<div class="card" style="margin-top:1rem;">
-    <h3>Top merchants</h3>
-    <div class="table-wrap">
-        <table class="data">
-            <thead>
-                <tr>
-                    <th>Merchant</th>
-                    <th>Top category</th>
-                    <th>Txns</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var m in _merchants)
-                {
-                    <tr class="clickable" @onclick="() => DrillMerchant(m.Merchant)">
-                        <td>@m.Merchant</td>
-                        <td>@(m.TopCategoryName ?? "—")</td>
-                        <td>@m.TransactionCount</td>
-                        <td class="amount out">@MoneyFormat.Zar(m.Total)</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h3><i class="bi bi-shop"></i> Top merchants</h3>
+                <p class="muted small">Your highest spending merchants.</p>
+            </div>
+        </div>
+        @foreach (var m in _merchants)
+        {
+            var pct = _cash.MoneyOut <= 0 ? 0 : (m.Total / _cash.MoneyOut) * 100;
+            <div class="legend-row clickable" @onclick="() => DrillMerchant(m.Merchant)">
+                <span class="avatar">@Initial(m.Merchant)</span>
+                <span>@m.Merchant</span>
+                <span class="muted">@pct.ToString("0")%</span>
+                <span class="amount out">@MoneyFormat.Zar(m.Total)</span>
+            </div>
+        }
+        <a class="text-link" href="@TxnUrl($"direction=MoneyOut&from={_start:yyyy-MM-dd}&to={_end:yyyy-MM-dd}")">View all merchants</a>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h3><i class="bi bi-graph-up"></i> Spending trends</h3>
+                <p class="muted small">Category trends over time.</p>
+            </div>
+        </div>
+        <ApexChart @key="@($"ctrend-{_chartKey}-{Theme.IsDark}")" TItem="CategoryMonthPoint" Height="240" Options="DarkAwareOptions<CategoryMonthPoint>()">
+            @foreach (var name in _trendCats)
+            {
+                var items = _catTrend.Where(x => x.CategoryName == name).ToList();
+                <ApexPointSeries TItem="CategoryMonthPoint" Items="items" Name="@name" SeriesType="SeriesType.Line"
+                                 XValue="@(e => e.Month)" YValue="@(e => e.Total)" />
+            }
+        </ApexChart>
     </div>
 </div>
 
 @code {
-    private DateRangePreset _preset = DateRangePreset.Last3Months;
+    private DateRangePreset _preset = DateRangePreset.ThisMonth;
     private int _chartKey;
     private DateTime _start;
     private DateTime _end;
     private CashFlowSummary _cash = new(0, 0, 0, 0);
-    private List<DailyCashFlowPoint> _daily = [];
+    private string? _inDelta, _outDelta, _netDelta;
+    private bool _inUp, _outUp, _netUp;
     private List<MonthlyTrendPoint> _monthly = [];
+    private List<DailyCashFlowPoint> _daily = [];
     private List<CategoryTotal> _byCategory = [];
     private List<MerchantTotal> _merchants = [];
-    private List<NamedValue> _incomeVsSpend = [];
+    private List<CategoryMonthPoint> _catTrend = [];
+    private List<string> _trendCats = [];
 
     protected override void OnInitialized()
     {
@@ -163,6 +173,17 @@
     private ApexChartOptions<T> DarkAwareOptions<T>() where T : class =>
         ChartThemeOptions.Create<T>(Theme.IsDark);
 
+    private ApexChartOptions<CategoryTotal> DonutOptions() =>
+        ChartThemeOptions.Create<CategoryTotal>(Theme.IsDark, o =>
+        {
+            if (o.PlotOptions?.Pie?.Donut?.Labels?.Total is { } total)
+            {
+                total.Show = true;
+                total.Label = "Total spent";
+            }
+            o.Legend = new Legend { Show = false };
+        });
+
     private void SetPreset(DateRangePreset preset)
     {
         _preset = preset;
@@ -173,15 +194,20 @@
     {
         (_start, _end) = _preset.Resolve();
         _cash = ReportingSvc.CashFlow(_start, _end);
-        _daily = ReportingSvc.PeriodCashFlow(_start, _end).ToList();
+        var days = (_end.Date - _start.Date).Days + 1;
+        var prev = ReportingSvc.CashFlow(_start.AddDays(-days), _start.AddDays(-1));
+        var id = CashFlowRules.VsLastDelta(_cash.MoneyIn, prev.MoneyIn);
+        var od = CashFlowRules.VsLastDelta(_cash.MoneyOut, prev.MoneyOut);
+        var nd = CashFlowRules.VsLastDelta(_cash.Net, prev.Net);
+        _inDelta = id?.Text; _inUp = id?.Change >= 0;
+        _outDelta = od?.Text; _outUp = od?.Change >= 0;
+        _netDelta = nd?.Text; _netUp = nd?.Change >= 0;
         _monthly = ReportingSvc.MonthlyTrend(_start, _end).ToList();
+        _daily = ReportingSvc.PeriodCashFlow(_start, _end).ToList();
         _byCategory = ReportingSvc.SpendingByCategory(_start, _end).ToList();
-        _merchants = ReportingSvc.TopMerchants(_start, _end, 8).ToList();
-        _incomeVsSpend =
-        [
-            new("Income", _cash.MoneyIn),
-            new("Spending", _cash.MoneyOut)
-        ];
+        _merchants = ReportingSvc.TopMerchants(_start, _end, 5).ToList();
+        _catTrend = ReportingSvc.SpendingCategoryTrend(_start, _end).ToList();
+        _trendCats = _catTrend.Select(x => x.CategoryName).Distinct().ToList();
         _chartKey++;
     }
 
@@ -195,14 +221,20 @@
     {
         var q = $"from={_start:yyyy-MM-dd}&to={_end:yyyy-MM-dd}&direction=MoneyOut";
         if (row.CategoryId is long id) q += $"&categoryId={id}";
-        else q += $"&search={Uri.EscapeDataString(row.CategoryName)}";
         Nav.NavigateTo(TxnUrl(q));
     }
 
     private void DrillMerchant(string merchant) =>
         Nav.NavigateTo(TxnUrl($"merchant={Uri.EscapeDataString(merchant)}&from={_start:yyyy-MM-dd}&to={_end:yyyy-MM-dd}&direction=MoneyOut"));
 
+    private async Task DownloadExport()
+    {
+        var csv = Export.ExportWorkbook();
+        await Js.InvokeVoidAsync("ffsDownload", "ffs-export.csv", csv);
+    }
+
     private static string TxnUrl(string query) => $"transactions?{query}";
+    private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
 
     public void Dispose() => Theme.Changed -= OnThemeChanged;
 }

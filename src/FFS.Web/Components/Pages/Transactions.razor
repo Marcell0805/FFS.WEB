@@ -2,65 +2,83 @@
 @inject TransactionQueryService TxnQuery
 @inject IFinancialDataProvider Data
 @inject NavigationManager Nav
+@inject CsvExportService Export
+@inject IJSRuntime Js
+@using FFS.Domain.Enums
 
 <PageTitle>@AppBrand.Name · Transactions</PageTitle>
 
+@{
+    var rows = GetRows();
+    var days = (_filter.SortDesc
+        ? rows.GroupBy(r => r.Transaction.TransactionDate.Date).OrderByDescending(g => g.Key)
+        : rows.GroupBy(r => r.Transaction.TransactionDate.Date).OrderBy(g => g.Key)).ToList();
+    var moneyIn = rows.Where(r => r.Transaction.Direction == MoneyDirection.MoneyIn).Sum(r => r.Transaction.Amount);
+    var moneyOut = rows.Where(r => r.Transaction.Direction == MoneyDirection.MoneyOut).Sum(r => r.Transaction.Amount);
+    var transfers = rows.Where(r => r.Transaction.Direction == MoneyDirection.Transfer).Sum(r => r.Transaction.Amount);
+    var inCount = rows.Count(r => r.Transaction.Direction == MoneyDirection.MoneyIn);
+    var outCount = rows.Count(r => r.Transaction.Direction == MoneyDirection.MoneyOut);
+    var transferCount = rows.Count(r => r.Transaction.Direction == MoneyDirection.Transfer);
+}
+
 <div class="page-hero">
-    <div class="eyebrow">Transactions</div>
-    <h1>Explore your history</h1>
-    <p>Filters update as you type. Click a row for details. Use group-by to cluster similar merchants or categories.</p>
+    <div>
+        <div class="eyebrow">Transactions</div>
+        <h1>Explore your history</h1>
+        <p>Filters update as you type. Click a row for details. Use group-by to cluster similar merchants or categories.</p>
+    </div>
+    <div class="hero-meta">
+        <button type="button" class="secondary" @onclick="DownloadExport"><i class="bi bi-download"></i> Export</button>
+    </div>
 </div>
 
-<div class="card">
-    <div class="filters">
-        <div>
-            <label>Search</label>
-            <input type="text" value="@_search" @oninput="OnSearchInput" placeholder="Merchant, description, bank…" />
-        </div>
-        <div>
-            <label>From</label>
-            <input type="date" @bind="_startDate" @bind:after="Refresh" />
-        </div>
-        <div>
-            <label>To</label>
-            <input type="date" @bind="_endDate" @bind:after="Refresh" />
-        </div>
-        <div>
-            <label>Account</label>
-            <select @bind="_accountId" @bind:after="Refresh">
-                <option value="">All</option>
-                @foreach (var a in Data.Accounts)
-                {
-                    <option value="@a.Id">@a.Name</option>
-                }
-            </select>
-        </div>
-        <div>
-            <label>Category</label>
-            <select @bind="_categoryId" @bind:after="Refresh">
-                <option value="">All</option>
-                @foreach (var c in Data.Categories)
-                {
-                    <option value="@c.Id">@c.Name</option>
-                }
-            </select>
-        </div>
-        <div>
-            <label>Direction</label>
-            <select @bind="_direction" @bind:after="Refresh">
-                <option value="">All</option>
-                @foreach (var d in Enum.GetValues<MoneyDirection>())
-                {
-                    <option value="@d">@d</option>
-                }
-            </select>
-        </div>
+<div class="filters toolbar">
+    <div>
+        <label>Search</label>
+        <input type="text" value="@_search" @oninput="OnSearchInput" placeholder="Merchant, description, category, bank…" />
     </div>
-    <div class="filters" style="grid-template-columns: 1.2fr auto auto;">
+    <div>
+        <label>From</label>
+        <input type="date" @bind="_startDate" @bind:after="Refresh" />
+    </div>
+    <div>
+        <label>To</label>
+        <input type="date" @bind="_endDate" @bind:after="Refresh" />
+    </div>
+    <div>
+        <label>Account</label>
+        <select @bind="_accountId" @bind:after="Refresh">
+            <option value="">All accounts</option>
+            @foreach (var a in Data.Accounts)
+            {
+                <option value="@a.Id">@a.Name</option>
+            }
+        </select>
+    </div>
+    <div>
+        <label>Category</label>
+        <select @bind="_categoryId" @bind:after="Refresh">
+            <option value="">All categories</option>
+            @foreach (var c in Data.Categories)
+            {
+                <option value="@c.Id">@c.Name</option>
+            }
+        </select>
+    </div>
+    <div>
+        <label>Direction</label>
+        <select @bind="_direction" @bind:after="OnDirectionSelect">
+            <option value="">All</option>
+            <option value="@nameof(MoneyDirection.MoneyIn)">Money in</option>
+            <option value="@nameof(MoneyDirection.MoneyOut)">Money out</option>
+            <option value="@nameof(MoneyDirection.Transfer)">Transfer</option>
+        </select>
+    </div>
+    <div class="filter-row-2">
         <div>
             <label>Status</label>
-            <select @bind="_status" @bind:after="Refresh">
-                <option value="">All</option>
+            <select @bind="_statusId" @bind:after="Refresh">
+                <option value="">All statuses</option>
                 @foreach (var s in Enum.GetValues<TransactionStatus>())
                 {
                     <option value="@s">@s</option>
@@ -84,64 +102,70 @@
                 }
             </div>
         </div>
-        <div style="align-self:end;">
+        <div class="filter-meta">
+            <span class="muted small">@rows.Count transactions</span>
             <button type="button" class="secondary" @onclick="ClearFilters">Clear filters</button>
         </div>
     </div>
+</div>
 
-    @{
-        var rows = GetRows();
+<div class="kpi-grid kpi-4">
+    <KpiCard Label="Money in" Value="@MoneyFormat.Zar(moneyIn)" Icon="bi-arrow-up" Tone="success"
+             Delta="@_inDelta" DeltaUp="@_inUp" Caption="@($"{inCount} transactions")" />
+    <KpiCard Label="Money out" Value="@MoneyFormat.Zar(moneyOut)" Icon="bi-arrow-down" Tone="error"
+             Delta="@_outDelta" DeltaUp="@_outUp" Caption="@($"{outCount} transactions · vs previous period")" />
+    <KpiCard Label="Transfers" Value="@MoneyFormat.Zar(transfers)" Icon="bi-arrow-left-right" Tone="accent"
+             Caption="@($"{transferCount} transactions")" />
+    <KpiCard Label="Total transactions" Value="@rows.Count.ToString()" Icon="bi-pie-chart"
+             Caption="@RangeCaption()" />
+</div>
+
+<div class="card table-card">
+
+    @if (rows.Count == 0)
+    {
+        <p class="muted">No transactions match these filters.</p>
     }
-
-    <div class="muted small" style="margin-bottom:0.75rem;">@rows.Count transactions@_activeHint</div>
-
-    @if (_groupBy == TransactionGroupBy.None)
+    else if (_groupBy != TransactionGroupBy.None)
     {
         <div class="table-wrap">
-            <table class="data">
-                <thead>
-                    <tr>
-                        <th class="sortable" @onclick="() => Sort(TransactionSortBy.Date)">Date @SortMark(TransactionSortBy.Date)</th>
-                        <th class="sortable" @onclick="() => Sort(TransactionSortBy.Merchant)">Merchant @SortMark(TransactionSortBy.Merchant)</th>
-                        <th>Description</th>
-                        <th>Account</th>
-                        <th class="sortable" @onclick="() => Sort(TransactionSortBy.Bank)">
-                            Bank @SortMark(TransactionSortBy.Bank)
-                            <button type="button" class="col-group-btn" title="Group by bank" @onclick:stopPropagation="true" @onclick="() => SetGroup(TransactionGroupBy.Bank)">
-                                <i class="bi bi-collection"></i>
-                            </button>
-                        </th>
-                        <th class="sortable" @onclick="() => Sort(TransactionSortBy.Category)">
-                            Category @SortMark(TransactionSortBy.Category)
-                            <button type="button" class="col-group-btn" title="Group by category" @onclick:stopPropagation="true" @onclick="() => SetGroup(TransactionGroupBy.Category)">
-                                <i class="bi bi-collection"></i>
-                            </button>
-                        </th>
-                        <th class="sortable" @onclick="() => Sort(TransactionSortBy.Direction)">Direction @SortMark(TransactionSortBy.Direction)</th>
-                        <th class="sortable" @onclick="() => Sort(TransactionSortBy.Status)">Status @SortMark(TransactionSortBy.Status)</th>
-                        <th class="sortable" @onclick="() => Sort(TransactionSortBy.Amount)">
-                            Amount @SortMark(TransactionSortBy.Amount)
-                            <button type="button" class="col-group-btn" title="Group by merchant" @onclick:stopPropagation="true" @onclick="() => SetGroup(TransactionGroupBy.Merchant)">
-                                <i class="bi bi-shop"></i>
-                            </button>
-                        </th>
-                    </tr>
-                </thead>
+            <table class="data dense">
+                @TxnHead()
+                <tbody>
+                    @foreach (var group in GroupRows(rows))
+                    {
+                        <tr class="day-row clickable" @onclick="() => ToggleGroup(group.Key)">
+                            <td colspan="7">
+                                <i class="bi @(_collapsed.Contains(group.Key) ? "bi-chevron-right" : "bi-chevron-down")"></i>
+                                @group.Key
+                                <span class="muted"> · @group.Items.Count @(group.Items.Count == 1 ? "transaction" : "transactions")</span>
+                            </td>
+                            <td class="amount">
+                                <span class="out">@MoneyFormat.Zar(group.TotalOut)</span>
+                                <span class="muted"> / in @MoneyFormat.Zar(group.TotalIn)</span>
+                            </td>
+                        </tr>
+                        @if (!_collapsed.Contains(group.Key))
+                        {
+                            @foreach (var row in group.Items)
+                            {
+                                @TxnCells(row, showFullDate: true)
+                            }
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (_filter.SortBy != TransactionSortBy.Date)
+    {
+        <div class="table-wrap">
+            <table class="data dense">
+                @TxnHead()
                 <tbody>
                     @foreach (var row in rows)
                     {
-                        var t = row.Transaction;
-                        <tr class="clickable" @onclick="() => Open(t.Id)">
-                            <td>@t.TransactionDate.ToString("dd MMM yyyy")</td>
-                            <td>@t.Merchant</td>
-                            <td>@t.Description</td>
-                            <td>@row.AccountName</td>
-                            <td>@row.BankName</td>
-                            <td>@row.CategoryName</td>
-                            <td><span class="badge @t.Direction.ToString().ToLowerInvariant()">@t.Direction</span></td>
-                            <td><span class="badge @(t.Status == TransactionStatus.Ignored ? "ignored" : "")">@t.Status</span></td>
-                            <td class="amount @CssAmount(t.Direction)">@MoneyFormat.Zar(t.Amount)</td>
-                        </tr>
+                        @TxnCells(row, showFullDate: true)
                     }
                 </tbody>
             </table>
@@ -149,42 +173,33 @@
     }
     else
     {
-        @foreach (var group in GroupRows(rows))
-        {
-            <div class="group-block">
-                <div class="group-header" @onclick="() => ToggleGroup(group.Key)">
-                    <div>
-                        <strong>@group.Key</strong>
-                        <span class="muted small"> · @group.Items.Count txns</span>
-                    </div>
-                    <div class="amount out">@MoneyFormat.Zar(group.TotalOut)
-                        <span class="muted"> / in @MoneyFormat.Zar(group.TotalIn)</span>
-                        <i class="bi @(_collapsed.Contains(group.Key) ? "bi-chevron-down" : "bi-chevron-up")"></i>
-                    </div>
-                </div>
-                @if (!_collapsed.Contains(group.Key))
-                {
-                    <div class="table-wrap">
-                        <table class="data">
-                            <tbody>
-                                @foreach (var row in group.Items)
-                                {
-                                    var t = row.Transaction;
-                                    <tr class="clickable" @onclick="() => Open(t.Id)">
-                                        <td>@t.TransactionDate.ToString("dd MMM yyyy")</td>
-                                        <td>@t.Merchant</td>
-                                        <td>@row.BankName</td>
-                                        <td>@row.CategoryName</td>
-                                        <td><span class="badge @t.Direction.ToString().ToLowerInvariant()">@t.Direction</span></td>
-                                        <td class="amount @CssAmount(t.Direction)">@MoneyFormat.Zar(t.Amount)</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </div>
-        }
+        <div class="table-wrap">
+            <table class="data dense">
+                @TxnHead()
+                <tbody>
+                    @foreach (var day in days)
+                    {
+                        var dayOut = day.Where(x => x.Transaction.Direction == MoneyDirection.MoneyOut).Sum(x => x.Transaction.Amount);
+                        var dayNet = day.Where(x => x.Transaction.Direction == MoneyDirection.MoneyIn).Sum(x => x.Transaction.Amount) - dayOut;
+                        <tr class="day-row clickable" @onclick="() => ToggleDay(day.Key)">
+                            <td colspan="7">
+                                <i class="bi @(_collapsedDays.Contains(day.Key) ? "bi-chevron-right" : "bi-chevron-down")"></i>
+                                @day.Key.ToString("d MMMM yyyy")
+                                <span class="muted"> · @day.Count() @(day.Count() == 1 ? "transaction" : "transactions")</span>
+                            </td>
+                            <td class="amount">@MoneyFormat.Zar(dayNet)</td>
+                        </tr>
+                        @if (!_collapsedDays.Contains(day.Key))
+                        {
+                            @foreach (var row in day.OrderByDescending(x => x.Transaction.TransactionDate))
+                            {
+                                @TxnCells(row, showFullDate: false)
+                            }
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
     }
 </div>
 
@@ -259,15 +274,23 @@
 
 @code {
     private readonly TransactionFilter _filter = new();
-    private readonly HashSet<string> _collapsed = new(StringComparer.OrdinalIgnoreCase);
     private string _search = "";
     private DateTime? _startDate;
     private DateTime? _endDate;
     private string _accountId = "";
     private string _categoryId = "";
     private string _direction = "";
-    private string _status = "";
     private string _merchant = "";
+    private bool _reviewOnly;
+    private string _dirChip = "all";
+    private string _rangeChip = "month";
+    private string _statusId = "";
+    private string? _inDelta;
+    private string? _outDelta;
+    private bool _inUp;
+    private bool _outUp;
+    private readonly HashSet<DateTime> _collapsedDays = [];
+    private readonly HashSet<string> _collapsed = new(StringComparer.OrdinalIgnoreCase);
     private TransactionGroupBy _groupBy = TransactionGroupBy.None;
     private Transaction? _edit;
     private string _editCategoryId = "";
@@ -281,19 +304,24 @@
     [SupplyParameterFromQuery(Name = "search")] public string? QuerySearch { get; set; }
     [SupplyParameterFromQuery(Name = "from")] public string? QueryFrom { get; set; }
     [SupplyParameterFromQuery(Name = "to")] public string? QueryTo { get; set; }
+    [SupplyParameterFromQuery(Name = "filter")] public string? QueryFilter { get; set; }
+    [SupplyParameterFromQuery(Name = "open")] public long? QueryOpen { get; set; }
     [SupplyParameterFromQuery(Name = "groupBy")] public string? QueryGroupBy { get; set; }
 
     protected override void OnParametersSet()
     {
-        var queryKey = $"{QueryCategoryId}|{QueryAccountId}|{QueryDirection}|{QueryMerchant}|{QuerySearch}|{QueryFrom}|{QueryTo}|{QueryGroupBy}";
+        var queryKey = $"{QueryCategoryId}|{QueryAccountId}|{QueryDirection}|{QueryMerchant}|{QuerySearch}|{QueryFrom}|{QueryTo}|{QueryFilter}|{QueryOpen}|{QueryGroupBy}";
         if (queryKey == _lastQuery) return;
         _lastQuery = queryKey;
 
         if (QueryCategoryId.HasValue) _categoryId = QueryCategoryId.Value.ToString();
-        else if (!string.IsNullOrEmpty(QueryCategoryId?.ToString())) { }
-        // Only overwrite fields that are present in the query so Clear still works via navigation
         if (QueryAccountId.HasValue) _accountId = QueryAccountId.Value.ToString();
-        if (!string.IsNullOrWhiteSpace(QueryDirection)) _direction = QueryDirection!;
+        if (!string.IsNullOrWhiteSpace(QueryDirection))
+        {
+            _direction = QueryDirection!;
+            _dirChip = QueryDirection!.Equals("MoneyOut", StringComparison.OrdinalIgnoreCase) ? "out"
+                : QueryDirection.Equals("MoneyIn", StringComparison.OrdinalIgnoreCase) ? "in" : "all";
+        }
         if (!string.IsNullOrWhiteSpace(QueryMerchant))
         {
             _merchant = QueryMerchant!;
@@ -302,23 +330,59 @@
         if (!string.IsNullOrWhiteSpace(QuerySearch)) _search = QuerySearch!;
         if (DateTime.TryParse(QueryFrom, out var from)) _startDate = from;
         if (DateTime.TryParse(QueryTo, out var to)) _endDate = to;
+        _reviewOnly = string.Equals(QueryFilter, "review", StringComparison.OrdinalIgnoreCase);
+        if (_reviewOnly) _statusId = nameof(TransactionStatus.Captured);
         if (Enum.TryParse<TransactionGroupBy>(QueryGroupBy, true, out var g)) _groupBy = g;
 
         if (_startDate is null || _endDate is null)
         {
-            var (start, end) = DateRangePreset.Last6Months.Resolve();
+            var (start, end) = DateRangePreset.ThisMonth.Resolve();
             _startDate ??= start;
             _endDate ??= end.Date;
+            _rangeChip = "month";
+        }
+        else
+        {
+            _rangeChip = GuessRangeChip();
         }
 
         Refresh();
-        BuildHint();
+        if (QueryOpen is long openId)
+            Open(openId);
+    }
+
+    private string GuessRangeChip()
+    {
+        var (monthStart, monthEnd) = DateRangePreset.ThisMonth.Resolve();
+        if (_startDate?.Date == monthStart.Date && _endDate?.Date == monthEnd.Date)
+            return "month";
+        var weekStart = DateTime.Today.AddDays(-6);
+        if (_startDate?.Date == weekStart.Date && _endDate?.Date == DateTime.Today)
+            return "week";
+        return "";
     }
 
     private void OnSearchInput(ChangeEventArgs e)
     {
         _search = e.Value?.ToString() ?? "";
         Refresh();
+    }
+
+    private void OnDirectionSelect()
+    {
+        _dirChip = _direction switch
+        {
+            nameof(MoneyDirection.MoneyIn) => "in",
+            nameof(MoneyDirection.MoneyOut) => "out",
+            _ => "all"
+        };
+        Refresh();
+    }
+
+    private void ToggleDay(DateTime day)
+    {
+        if (!_collapsedDays.Add(day))
+            _collapsedDays.Remove(day);
     }
 
     private void Refresh()
@@ -329,8 +393,40 @@
         _filter.AccountId = long.TryParse(_accountId, out var aid) ? aid : null;
         _filter.CategoryId = long.TryParse(_categoryId, out var cid) ? cid : null;
         _filter.Direction = Enum.TryParse<MoneyDirection>(_direction, out var d) ? d : null;
-        _filter.Status = Enum.TryParse<TransactionStatus>(_status, out var s) ? s : null;
+        _filter.Status = Enum.TryParse<TransactionStatus>(_statusId, out var st) ? st : null;
+        _reviewOnly = _filter.Status == TransactionStatus.Captured;
         BuildHint();
+        BuildDeltas();
+    }
+
+    private void BuildDeltas()
+    {
+        if (_startDate is null || _endDate is null)
+        {
+            _inDelta = _outDelta = null;
+            return;
+        }
+
+        var days = (_endDate.Value.Date - _startDate.Value.Date).Days + 1;
+        var prevFilter = new TransactionFilter
+        {
+            Start = _startDate.Value.AddDays(-days),
+            End = _startDate.Value.AddDays(-1),
+            AccountId = _filter.AccountId,
+            CategoryId = _filter.CategoryId
+        };
+        var prev = TxnQuery.Query(prevFilter);
+        var prevIn = prev.Where(r => r.Transaction.Direction == MoneyDirection.MoneyIn).Sum(r => r.Transaction.Amount);
+        var prevOut = prev.Where(r => r.Transaction.Direction == MoneyDirection.MoneyOut).Sum(r => r.Transaction.Amount);
+        var current = TxnQuery.Query(_filter);
+        var curIn = current.Where(r => r.Transaction.Direction == MoneyDirection.MoneyIn).Sum(r => r.Transaction.Amount);
+        var curOut = current.Where(r => r.Transaction.Direction == MoneyDirection.MoneyOut).Sum(r => r.Transaction.Amount);
+        var id = CashFlowRules.VsLastDelta(curIn, prevIn);
+        var od = CashFlowRules.VsLastDelta(curOut, prevOut);
+        _inDelta = id?.Text;
+        _inUp = id?.Change >= 0;
+        _outDelta = od?.Text;
+        _outUp = od?.Change >= 0;
     }
 
     private void BuildHint()
@@ -343,6 +439,7 @@
         }
         if (!string.IsNullOrWhiteSpace(_merchant)) bits.Add($"merchant {_merchant}");
         if (_filter.Direction.HasValue) bits.Add(_filter.Direction.Value.ToString());
+        if (_reviewOnly) bits.Add("needs review");
         _activeHint = bits.Count == 0 ? "" : $" · filtered by {string.Join(", ", bits)}";
     }
 
@@ -357,6 +454,100 @@
                 .ToList();
         }
         return rows;
+    }
+
+    private void ClearFilters()
+    {
+        var (start, end) = DateRangePreset.ThisMonth.Resolve();
+        _search = "";
+        _merchant = "";
+        _accountId = "";
+        _categoryId = "";
+        _direction = "";
+        _dirChip = "all";
+        _rangeChip = "month";
+        _statusId = "";
+        _reviewOnly = false;
+        _groupBy = TransactionGroupBy.None;
+        _collapsed.Clear();
+        _filter.SortBy = TransactionSortBy.Date;
+        _filter.SortDesc = true;
+        _startDate = start;
+        _endDate = end.Date;
+        _lastQuery = "";
+        Nav.NavigateTo("transactions", forceLoad: false);
+        Refresh();
+    }
+
+    private void Open(long id)
+    {
+        var t = TxnQuery.Get(id);
+        if (t is null) return;
+        _edit = new Transaction
+        {
+            Id = t.Id,
+            AccountId = t.AccountId,
+            TransactionDate = t.TransactionDate,
+            Merchant = t.Merchant,
+            Description = t.Description,
+            Amount = t.Amount,
+            Direction = t.Direction,
+            CategoryId = t.CategoryId,
+            Status = t.Status,
+            Reference = t.Reference
+        };
+        _editCategoryId = t.CategoryId?.ToString() ?? "";
+    }
+
+    private void Save()
+    {
+        if (_edit is null) return;
+        _edit.CategoryId = long.TryParse(_editCategoryId, out var cid) ? cid : null;
+        if (_edit.Status is not TransactionStatus.Ignored and not TransactionStatus.Captured)
+            _edit.Status = TransactionStatus.Edited;
+        TxnQuery.Update(_edit);
+        _edit = null;
+    }
+
+    private void Close() => _edit = null;
+
+    private string BankFor(long accountId) =>
+        Data.Accounts.FirstOrDefault(a => a.Id == accountId)?.InstitutionName ?? "—";
+
+    private static string Initial(string name) =>
+        string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+
+    private static string DirLabel(MoneyDirection d) => d switch
+    {
+        MoneyDirection.MoneyIn => "Money in",
+        MoneyDirection.MoneyOut => "Money out",
+        _ => "Transfer"
+    };
+
+    private static string CssAmt(MoneyDirection d) => d switch
+    {
+        MoneyDirection.MoneyIn => "in",
+        MoneyDirection.MoneyOut => "out",
+        _ => "transfer"
+    };
+
+    private static string SignedAmt(Transaction t) => t.Direction switch
+    {
+        MoneyDirection.MoneyIn => $"+{MoneyFormat.Zar(t.Amount)}",
+        MoneyDirection.MoneyOut => $"-{MoneyFormat.Zar(t.Amount)}",
+        _ => MoneyFormat.Zar(t.Amount)
+    };
+
+    private string RangeCaption()
+    {
+        if (_startDate is null || _endDate is null) return "";
+        return $"Showing {_startDate:d MMM yyyy} – {_endDate:d MMM yyyy}";
+    }
+
+    private async Task DownloadExport()
+    {
+        var csv = Export.ExportWorkbook();
+        await Js.InvokeVoidAsync("ffsDownload", "ffs-export.csv", csv);
     }
 
     private IEnumerable<(string Key, List<TransactionRow> Items, decimal TotalIn, decimal TotalOut)> GroupRows(
@@ -418,62 +609,42 @@
             : "<span class=\"sort-active\">↑</span>");
     }
 
-    private void ClearFilters()
-    {
-        var (start, end) = DateRangePreset.Last6Months.Resolve();
-        _search = "";
-        _merchant = "";
-        _accountId = "";
-        _categoryId = "";
-        _direction = "";
-        _status = "";
-        _startDate = start;
-        _endDate = end.Date;
-        _groupBy = TransactionGroupBy.None;
-        _lastQuery = "";
-        Nav.NavigateTo("transactions", forceLoad: false);
-        Refresh();
-    }
+    private RenderFragment TxnHead() => @<thead>
+        <tr>
+            <th class="sortable" @onclick="() => Sort(TransactionSortBy.Date)">Date @SortMark(TransactionSortBy.Date)</th>
+            <th class="sortable" @onclick="() => Sort(TransactionSortBy.Merchant)">
+                Merchant @SortMark(TransactionSortBy.Merchant)
+                <button type="button" class="col-group-btn" title="Group by merchant" @onclick:stopPropagation="true" @onclick="() => SetGroup(TransactionGroupBy.Merchant)">
+                    <i class="bi bi-collection"></i>
+                </button>
+            </th>
+            <th>Description</th>
+            <th>Account</th>
+            <th class="sortable" @onclick="() => Sort(TransactionSortBy.Category)">
+                Category @SortMark(TransactionSortBy.Category)
+                <button type="button" class="col-group-btn" title="Group by category" @onclick:stopPropagation="true" @onclick="() => SetGroup(TransactionGroupBy.Category)">
+                    <i class="bi bi-collection"></i>
+                </button>
+            </th>
+            <th class="sortable" @onclick="() => Sort(TransactionSortBy.Direction)">Direction @SortMark(TransactionSortBy.Direction)</th>
+            <th class="sortable" @onclick="() => Sort(TransactionSortBy.Status)">Status @SortMark(TransactionSortBy.Status)</th>
+            <th class="sortable" @onclick="() => Sort(TransactionSortBy.Amount)">Amount @SortMark(TransactionSortBy.Amount)</th>
+        </tr>
+    </thead>;
 
-    private void Open(long id)
-    {
-        var t = TxnQuery.Get(id);
-        if (t is null) return;
-        _edit = new Transaction
-        {
-            Id = t.Id,
-            AccountId = t.AccountId,
-            TransactionDate = t.TransactionDate,
-            Merchant = t.Merchant,
-            Description = t.Description,
-            Amount = t.Amount,
-            Direction = t.Direction,
-            CategoryId = t.CategoryId,
-            Status = t.Status,
-            Reference = t.Reference
-        };
-        _editCategoryId = t.CategoryId?.ToString() ?? "";
-    }
-
-    private void Save()
-    {
-        if (_edit is null) return;
-        _edit.CategoryId = long.TryParse(_editCategoryId, out var cid) ? cid : null;
-        if (_edit.Status is not TransactionStatus.Ignored and not TransactionStatus.Captured)
-            _edit.Status = TransactionStatus.Edited;
-        TxnQuery.Update(_edit);
-        _edit = null;
-    }
-
-    private void Close() => _edit = null;
-
-    private string BankFor(long accountId) =>
-        Data.Accounts.FirstOrDefault(a => a.Id == accountId)?.InstitutionName ?? "—";
-
-    private static string CssAmount(MoneyDirection d) => d switch
-    {
-        MoneyDirection.MoneyIn => "in",
-        MoneyDirection.MoneyOut => "out",
-        _ => "transfer"
-    };
+    private RenderFragment TxnCells(TransactionRow row, bool showFullDate) => @<tr class="clickable" @onclick="() => Open(row.Transaction.Id)">
+        <td class="muted">@(showFullDate ? row.Transaction.TransactionDate.ToString("d MMM yyyy") : row.Transaction.TransactionDate.ToString("HH:mm"))</td>
+        <td>
+            <span class="merchant">
+                <span class="avatar">@Initial(row.Transaction.Merchant)</span>
+                @row.Transaction.Merchant
+            </span>
+        </td>
+        <td>@row.Transaction.Description</td>
+        <td>@row.AccountName</td>
+        <td>@row.CategoryName</td>
+        <td><span class="dir @row.Transaction.Direction.ToString().ToLowerInvariant()">@DirLabel(row.Transaction.Direction)</span></td>
+        <td><span class="badge">@row.Transaction.Status</span></td>
+        <td class="amount @CssAmt(row.Transaction.Direction)">@SignedAmt(row.Transaction)</td>
+    </tr>;
 }

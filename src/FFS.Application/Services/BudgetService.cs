@@ -1,5 +1,6 @@
 using FFS.Application.Data;
 using FFS.Application.Models;
+using FFS.Domain;
 using FFS.Domain.Enums;
 
 namespace FFS.Application.Services;
@@ -36,18 +37,25 @@ public sealed class BudgetService
 
         var actualByCategory = _data.Transactions
             .Where(t => t.TransactionDate >= start && t.TransactionDate <= end)
-            .Where(t => t.Status != TransactionStatus.Ignored)
+            .Where(t => !CashFlowRules.SkipFromCashFlow(t))
             .Where(t => t.Direction == MoneyDirection.MoneyOut)
             .Where(t => t.CategoryId.HasValue)
             .GroupBy(t => t.CategoryId!.Value)
             .ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+
+        var savingsActual = _data.GoalTransactions
+            .Where(gt => gt.ContributionDate >= start && gt.ContributionDate <= end)
+            .Sum(gt => gt.Amount);
 
         var categoryRows = items
             .Where(i => i.CategoryId.HasValue)
             .Select(i =>
             {
                 var catName = categories.TryGetValue(i.CategoryId!.Value, out var c) ? c.Name : "Unknown";
-                var actual = actualByCategory.TryGetValue(i.CategoryId.Value, out var a) ? a : 0m;
+                // Savings actual is goal contributions at bucket level, not category spend.
+                var actual = i.Bucket == BudgetBucketKind.Savings
+                    ? 0m
+                    : actualByCategory.TryGetValue(i.CategoryId.Value, out var a) ? a : 0m;
                 return new BudgetCategoryRow(i.CategoryId.Value, catName, i.Bucket, i.PlannedAmount, actual, i.PlannedAmount - actual);
             })
             .OrderBy(r => r.Bucket)
@@ -59,7 +67,9 @@ public sealed class BudgetService
             .Select(bucket =>
             {
                 var planned = items.Where(i => i.Bucket == bucket).Sum(i => i.PlannedAmount);
-                var actual = categoryRows.Where(r => r.Bucket == bucket).Sum(r => r.Actual);
+                var actual = bucket == BudgetBucketKind.Savings
+                    ? savingsActual
+                    : categoryRows.Where(r => r.Bucket == bucket).Sum(r => r.Actual);
                 return new BudgetBucketRow(bucket, planned, actual, planned - actual);
             })
             .ToList();

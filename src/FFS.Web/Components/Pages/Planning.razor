@@ -1,84 +1,160 @@
 @page "/planning"
+@page "/planning/budget"
+@page "/budget"
 @inject BudgetService BudgetSvc
 @inject IFinancialDataProvider Data
+@inject NavigationManager Nav
+@using FFS.Domain.Enums
 
 <PageTitle>@AppBrand.Name · Planning</PageTitle>
 
-<div class="page-hero">
-    <div class="eyebrow">Planning</div>
-    <h1>Budget vs actual</h1>
-    <p>Needs, Wants and Savings buckets — separate from category types. Planned amounts compared to this month’s MoneyOut.</p>
-</div>
-
 @{
     var overview = BudgetSvc.GetCurrentMonthOverview();
-    var monthLabel = new DateTime(overview.Year, overview.Month, 1).ToString("MMMM yyyy");
+    var month = new DateTime(overview.Year, overview.Month, 1);
+    var hasPlan = overview.Buckets.Sum(b => b.Planned) > 0;
+    var needs = overview.Buckets.FirstOrDefault(b => b.Bucket == BudgetBucketKind.Needs);
+    var over = needs is { Remaining: < 0 };
+    var q = _catSearch.Trim();
+    var cats = overview.Categories
+        .Where(c => string.IsNullOrWhiteSpace(q) || c.CategoryName.Contains(q, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    if (_sort == "actual")
+        cats = cats.OrderByDescending(c => c.Actual).ToList();
+    else if (_sort == "name")
+        cats = cats.OrderBy(c => c.CategoryName).ToList();
+    else
+        cats = cats.OrderBy(c => c.Bucket).ThenBy(c => c.CategoryName).ToList();
 }
 
-<div class="kpi-grid">
-    <div class="kpi-card">
-        <div class="kpi-label">Income target · @monthLabel</div>
-        <div class="kpi-value">@MoneyFormat.Zar(overview.IncomeTarget)</div>
+<div class="page-hero">
+    <div>
+        <div class="eyebrow">Planning</div>
+        <h1>Budget vs actual</h1>
+        <p>Needs, Wants and Savings — separated from category types. Planned amounts compared to this month’s Money Out.</p>
     </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Actual income</div>
-        <div class="kpi-value positive">@MoneyFormat.Zar(overview.ActualIncome)</div>
+    <div class="hero-meta">
+        <span class="pill"><i class="bi bi-calendar3"></i> @month.ToString("d MMM yyyy") – @DateTime.Today.ToString("d MMM yyyy")</span>
+        <a class="btn secondary" href="settings">Manage budget</a>
     </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Variance</div>
-        @{
-            var incomeVar = overview.ActualIncome - overview.IncomeTarget;
+</div>
+
+@if (!hasPlan)
+{
+    <div class="card"><p>Create a Needs / Wants / Savings budget.</p></div>
+}
+else
+{
+    <div class="grid-3">
+        @foreach (var b in overview.Buckets)
+        {
+            var used = b.Planned <= 0 ? 0 : Math.Clamp((double)(b.Actual / b.Planned) * 100, 0, 100);
+            var tone = b.Bucket switch
+            {
+                BudgetBucketKind.Needs => "success",
+                BudgetBucketKind.Wants => "error",
+                _ => "accent"
+            };
+            <div class="card ring-card">
+                <div class="ring-head">
+                    <span class="stat-ico @tone"><i class="bi @(b.Bucket == BudgetBucketKind.Needs ? "bi-house" : b.Bucket == BudgetBucketKind.Wants ? "bi-bag" : "bi-piggy-bank")"></i></span>
+                    <div>
+                        <h3>@b.Bucket</h3>
+                        <p class="muted small">@(b.Bucket == BudgetBucketKind.Needs ? "Essentials to keep life running." : b.Bucket == BudgetBucketKind.Wants ? "The things that make life enjoyable." : "For a stronger tomorrow.")</p>
+                    </div>
+                </div>
+                <div class="ring-body">
+                    <div class="ring @tone" style="--p:@used.ToString("0.##")">
+                        <span>@used.ToString("0")%</span>
+                    </div>
+                    <div class="ring-stats">
+                        <div class="list-row"><span>Planned</span><span class="amount">@MoneyFormat.Zar(b.Planned)</span></div>
+                        <div class="list-row"><span>@(b.Bucket == BudgetBucketKind.Savings ? "Saved" : "Actual")</span><span class="amount out">@MoneyFormat.Zar(b.Actual)</span></div>
+                        <div class="list-row"><span>@(b.Bucket == BudgetBucketKind.Savings ? "Vs plan" : "Remaining")</span><span class="amount @(b.Remaining >= 0 ? "in" : "out")">@MoneyFormat.Zar(b.Remaining)</span></div>
+                    </div>
+                </div>
+            </div>
         }
-        <div class="kpi-value @(incomeVar >= 0 ? "positive" : "negative")">@MoneyFormat.Zar(incomeVar)</div>
     </div>
-</div>
 
-<div class="grid-3">
-    @foreach (var b in overview.Buckets)
-    {
-        <div class="card">
-            <h3>@b.Bucket</h3>
-            <div class="list-row"><span>Planned</span><span class="amount">@MoneyFormat.Zar(b.Planned)</span></div>
-            <div class="list-row"><span>Actual</span><span class="amount out">@MoneyFormat.Zar(b.Actual)</span></div>
-            <div class="list-row"><span>Remaining</span><span class="amount @(b.Remaining >= 0 ? "in" : "out")">@MoneyFormat.Zar(b.Remaining)</span></div>
-            @{
-                var pct = b.Planned <= 0 ? 0 : Math.Clamp((double)(b.Actual / b.Planned) * 100, 0, 100);
-            }
-            <div class="progress"><span style="width:@pct.ToString("0.##")%"></span></div>
-            <div class="muted small">@pct.ToString("0")% of planned used</div>
+    <div class="card" style="margin-top:1rem;">
+        <div class="card-header">
+            <div>
+                <h3><i class="bi bi-layers"></i> Category assignments</h3>
+                <p class="muted small">Category type (Income / Expense / Transfer) stays separate from budget bucket (Needs / Wants / Savings).</p>
+            </div>
+            <div class="hero-meta">
+                <input class="inline-search" type="text" placeholder="Search categories…" value="@_catSearch" @oninput="OnCatSearch" />
+                <select class="inline-select" @bind="_sort">
+                    <option value="bucket">Sort by: Bucket</option>
+                    <option value="name">Sort by: Name</option>
+                    <option value="actual">Sort by: Actual</option>
+                </select>
+            </div>
         </div>
-    }
-</div>
-
-<div class="card" style="margin-top:1rem;">
-    <h3>Category assignments</h3>
-    <p class="muted small">Category type (Income / Expense / Transfer) stays separate from budget bucket (Needs / Wants / Savings).</p>
-    <div class="table-wrap">
-        <table class="data">
-            <thead>
-                <tr>
-                    <th>Category</th>
-                    <th>Type</th>
-                    <th>Bucket</th>
-                    <th>Planned</th>
-                    <th>Actual</th>
-                    <th>Remaining</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var row in overview.Categories)
-                {
-                    var type = Data.Categories.FirstOrDefault(c => c.Id == row.CategoryId)?.CategoryType.ToString() ?? "—";
+        <div class="table-wrap">
+            <table class="data dense">
+                <thead>
                     <tr>
-                        <td>@row.CategoryName</td>
-                        <td><span class="badge">@type</span></td>
-                        <td>@row.Bucket</td>
-                        <td class="amount">@MoneyFormat.Zar(row.Planned)</td>
-                        <td class="amount out">@MoneyFormat.Zar(row.Actual)</td>
-                        <td class="amount @(row.Remaining >= 0 ? "in" : "out")">@MoneyFormat.Zar(row.Remaining)</td>
+                        <th>Category</th>
+                        <th>Type</th>
+                        <th>Bucket</th>
+                        <th>Planned</th>
+                        <th>Actual</th>
+                        <th>Remaining</th>
+                        <th>Progress</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var row in cats)
+                    {
+                        var type = Data.Categories.FirstOrDefault(c => c.Id == row.CategoryId)?.CategoryType.ToString() ?? "—";
+                        var used = row.Planned <= 0
+                            ? 0
+                            : Math.Clamp((double)(row.Actual / row.Planned) * 100, 0, 160);
+                        <tr>
+                            <td><i class="bi @CategoryIcons.For(row.CategoryName)"></i> @row.CategoryName</td>
+                            <td>@type</td>
+                            <td>@row.Bucket</td>
+                            <td class="amount">@MoneyFormat.Zar(row.Planned)</td>
+                            <td class="amount out">@MoneyFormat.Zar(row.Actual)</td>
+                            <td class="amount @(row.Remaining >= 0 ? "in" : "out")">@MoneyFormat.Zar(row.Remaining)</td>
+                            <td class="progress-cell">
+                                <div class="progress slim"><span style="width:@Math.Min(used, 100).ToString("0.##")%"></span></div>
+                                <span class="muted small">@used.ToString("0")%</span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
-</div>
+
+    <div class="grid-2" style="margin-top:1rem;">
+        <div class="card insight-card @(over ? "warn" : "ok")">
+            <i class="bi @(over ? "bi-exclamation-circle" : "bi-check-circle")"></i>
+            <div>
+                <strong>@(over ? "You’re slightly over budget on Needs" : "Needs are on plan")</strong>
+                <p class="muted small">
+                    @(over
+                        ? "Your Needs spending is above plan. Consider reviewing Fuel and Groceries."
+                        : "Needs spending is within this month’s plan.")
+                </p>
+            </div>
+        </div>
+        <div class="card insight-card ok">
+            <i class="bi bi-lightbulb"></i>
+            <div>
+                <strong>Tip</strong>
+                <p class="muted small">You’re doing well on Wants. Keep it up!</p>
+                <a class="text-link" href="reports">View full report →</a>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _catSearch = "";
+    private string _sort = "bucket";
+
+    private void OnCatSearch(ChangeEventArgs e) => _catSearch = e.Value?.ToString() ?? "";
+}

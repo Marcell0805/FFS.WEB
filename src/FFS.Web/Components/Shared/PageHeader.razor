@@ -1,0 +1,21 @@
+<div class="page-hero">
+    <div>
+        <div class="eyebrow">@Eyebrow</div>
+        <h1>@Title</h1>
+        @if (!string.IsNullOrWhiteSpace(Subtitle))
+        {
+            <p>@Subtitle</p>
+        }
+    </div>
+    @if (ChildContent is not null)
+    {
+        <div class="page-hero-actions">@ChildContent</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Eyebrow { get; set; } = "";
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

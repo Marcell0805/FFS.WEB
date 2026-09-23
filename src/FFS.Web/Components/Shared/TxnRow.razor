@@ -1,0 +1,47 @@
+@using FFS.Domain.Entities
+@using FFS.Domain.Enums
+
+<div class="txn-row clickable" @onclick="OnClick">
+    <span class="cat-icon"><i class="bi @Icon"></i></span>
+    <div class="txn-main">
+        <div class="txn-title">@Title</div>
+        <div class="muted small">@Subtitle</div>
+    </div>
+    @if (ShowDate && Date is not null)
+    {
+        <div class="muted small txn-date">@Date.Value.ToString("dd MMM yyyy")</div>
+    }
+    <div class="amount @Tone">@AmountLabel</div>
+</div>
+
+@code {
+    [Parameter] public Transaction Transaction { get; set; } = null!;
+    [Parameter] public string CategoryName { get; set; } = "Uncategorized";
+    [Parameter] public string AccountName { get; set; } = "";
+    [Parameter] public bool ShowDate { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    private string Icon => CategoryIcons.For(CategoryName);
+    private string Title => string.IsNullOrWhiteSpace(Transaction.Merchant) ? CategoryName : Transaction.Merchant;
+    private string Subtitle => $"{CategoryName} · {AccountName}";
+    private DateTime? Date => Transaction.TransactionDate;
+    private string Tone => Transaction.Direction switch
+    {
+        MoneyDirection.MoneyIn => "in",
+        MoneyDirection.MoneyOut => "out",
+        _ => "transfer"
+    };
+    private string AmountLabel
+    {
+        get
+        {
+            var formatted = MoneyFormat.Zar(Transaction.Amount);
+            return Transaction.Direction switch
+            {
+                MoneyDirection.MoneyIn => $"+{formatted}",
+                MoneyDirection.MoneyOut => $"-{formatted}",
+                _ => formatted
+            };
+        }
+    }
+}

@@ -1,0 +1,125 @@
+@page "/settings"
+@inject ThemeService Theme
+@inject IFinancialDataProvider Data
+@inject CsvExportService Export
+@inject IJSRuntime Js
+
+<PageTitle>@AppBrand.Name · Settings</PageTitle>
+
+<PageHeader Eyebrow="Settings" Title="Settings">
+    <span class="version-badge">@AppBrand.VersionLabel</span>
+</PageHeader>
+
+<section class="settings-group">
+    <h3>Accounts &amp; data</h3>
+    <div class="settings-card">
+        <div class="settings-row">
+            <span class="settings-icon accent"><i class="bi bi-bank"></i></span>
+            <div>
+                <strong>Accounts</strong>
+                <p class="muted small">@Data.Accounts.Count(a => a.IsActive) active accounts</p>
+            </div>
+        </div>
+        @foreach (var a in Data.Accounts.Where(x => x.IsActive))
+        {
+            <div class="list-row inset-row">
+                <span>@a.Name</span>
+                <span class="muted small">@a.InstitutionName · @a.AccountType</span>
+            </div>
+        }
+        <div class="settings-row">
+            <span class="settings-icon success"><i class="bi bi-tags"></i></span>
+            <div>
+                <strong>Categories</strong>
+                <p class="muted small">@Data.Categories.Count(c => c.IsActive) categories</p>
+            </div>
+        </div>
+        <div class="settings-row disabled">
+            <span class="settings-icon muted-icon"><i class="bi bi-upload"></i></span>
+            <div>
+                <strong>Import</strong>
+                <p class="muted small">CSV / PDF — coming to web</p>
+            </div>
+        </div>
+        <button type="button" class="settings-row buttonish" @onclick="DownloadExport">
+            <span class="settings-icon accent"><i class="bi bi-download"></i></span>
+            <div>
+                <strong>Export</strong>
+                <p class="muted small">Transactions plus budget tables</p>
+            </div>
+        </button>
+    </div>
+</section>
+
+<section class="settings-group">
+    <h3>Notifications &amp; security</h3>
+    <div class="settings-card">
+        <div class="settings-row">
+            <span class="settings-icon accent"><i class="bi bi-broadcast"></i></span>
+            <div>
+                <strong>Banks / sources</strong>
+                <p class="muted small">@Data.NotificationSources.Count notification sources</p>
+            </div>
+        </div>
+        <button type="button" class="settings-row buttonish" @onclick="ToggleTheme">
+            <span class="settings-icon accent"><i class="bi @(Theme.IsDark ? "bi-sun" : "bi-moon-stars")"></i></span>
+            <div>
+                <strong>Dark mode</strong>
+                <p class="muted small">@(Theme.IsDark ? "On" : "Off")</p>
+            </div>
+        </button>
+    </div>
+</section>
+
+<section class="settings-group">
+    <h3>About</h3>
+    <div class="settings-card">
+        <div class="settings-row">
+            <span class="settings-icon accent"><i class="bi bi-info-circle"></i></span>
+            <div>
+                <strong>About @AppBrand.Name</strong>
+                <p class="muted small">@AppBrand.Tagline</p>
+            </div>
+        </div>
+        <div class="settings-row disabled">
+            <span class="settings-icon muted-icon"><i class="bi bi-chat"></i></span>
+            <div>
+                <strong>Send feedback</strong>
+                <p class="muted small">Not available in this prototype</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="settings-group">
+    <h3>Tools</h3>
+    <div class="settings-card">
+        <div class="settings-row">
+            <span class="settings-icon muted-icon"><i class="bi bi-database"></i></span>
+            <div>
+                <strong>In-memory demo</strong>
+                <p class="muted small">No wipe or cloud sync on web V0</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    private async Task ToggleTheme()
+    {
+        Theme.Toggle();
+        var value = Theme.IsDark ? "dark" : "light";
+        try
+        {
+            await Js.InvokeVoidAsync("ffsTheme.set", value);
+            await Js.InvokeVoidAsync("ffsTheme.save", value);
+        }
+        catch { /* ignore */ }
+    }
+
+    private async Task DownloadExport()
+    {
+        var csv = Export.ExportWorkbook();
+        await Js.InvokeVoidAsync("ffsDownload", "ffs-export.csv", csv);
+    }
+}

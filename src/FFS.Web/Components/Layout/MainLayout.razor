@@ -2,6 +2,7 @@
 @inject ThemeService Theme
 @inject AppBootService Boot
 @inject IJSRuntime Js
+@inject NavigationManager Nav
 @implements IDisposable
 
 @if (!_bootResolved)
@@ -17,43 +18,49 @@ else
     <div class="app-shell @(Theme.IsDark ? "theme-dark" : null)">
         <aside class="sidebar">
             <div class="brand">
-                <img class="brand-mark" src="branding/icon.png" alt="@AppBrand.Name" width="44" height="44" />
+                <img class="brand-mark" src="branding/icon.png" alt="@AppBrand.Name" width="40" height="40" />
                 <div class="brand-text">
                     <div class="brand-name">@AppBrand.Name</div>
-                    <div class="brand-sub">Financial Forecasting System</div>
+                    <div class="brand-sub">@AppBrand.Subtitle</div>
                 </div>
             </div>
             <nav class="nav">
-                <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
-                    <i class="bi bi-speedometer2"></i> Dashboard
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    <i class="bi bi-grid-1x2"></i> Dashboard
                 </NavLink>
                 <NavLink class="nav-link" href="transactions">
-                    <i class="bi bi-list-ul"></i> Transactions
+                    <i class="bi bi-arrow-left-right"></i> Transactions
                 </NavLink>
+                <div class="nav-link nav-disabled" aria-disabled="true">
+                    <i class="bi bi-upload"></i> Import
+                </div>
                 <NavLink class="nav-link" href="reports">
-                    <i class="bi bi-bar-chart-line"></i> Reports
+                    <i class="bi bi-bar-chart"></i> Reports
                 </NavLink>
-                <NavLink class="nav-link" href="planning">
-                    <i class="bi bi-pie-chart"></i> Planning
+                <NavLink class="@PlanningClass" href="planning">
+                    <i class="bi bi-clipboard-data"></i> Planning
                 </NavLink>
-                <NavLink class="nav-link" href="goals">
+                <NavLink class="@GoalsClass" href="goals">
                     <i class="bi bi-flag"></i> Goals
                 </NavLink>
                 <NavLink class="nav-link" href="forecast">
                     <i class="bi bi-graph-up-arrow"></i> Forecast
                 </NavLink>
+                <NavLink class="nav-link" href="settings">
+                    <i class="bi bi-gear"></i> Settings
+                </NavLink>
             </nav>
             <div class="sidebar-footer">
                 <button type="button" class="theme-toggle" @onclick="ToggleTheme">
-                    <i class="bi @(Theme.IsDark ? "bi-sun" : "bi-moon-stars")"></i>
+                    <i class="bi @(Theme.IsDark ? "bi-brightness-high" : "bi-moon-stars")"></i>
                     @(Theme.IsDark ? "Light theme" : "Dark theme")
                 </button>
-                <p class="tagline">Know your money.<br />Forecast your future.</p>
-                <p class="proto-badge">V0 · In-memory demo</p>
+                <p class="drawer-quote">@AppBrand.Tagline</p>
+                <p class="proto-badge">@AppBrand.VersionLabel · in-memory demo</p>
             </div>
         </aside>
         <div class="main">
-            <main class="content">
+            <main class="content page-appear">
                 @Body
             </main>
         </div>
@@ -63,10 +70,33 @@ else
 @code {
     private bool _bootResolved;
 
+    private string PlanningClass
+    {
+        get
+        {
+            var path = Path();
+            var selected = path.Contains("/planning") || path.EndsWith("/budget");
+            return selected ? "nav-link active" : "nav-link";
+        }
+    }
+
+    private string GoalsClass
+    {
+        get
+        {
+            var path = Path();
+            var selected = path.Contains("/goal");
+            return selected ? "nav-link active" : "nav-link";
+        }
+    }
+
+    private string Path() => new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant();
+
     protected override void OnInitialized()
     {
         Theme.Changed += OnThemeChanged;
         Boot.Changed += OnBootChanged;
+        Nav.LocationChanged += OnLocationChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -76,11 +106,9 @@ else
         try
         {
             var stored = await Js.InvokeAsync<string?>("ffsTheme.get");
-            if (stored == "dark")
-            {
-                Theme.SetDark(true);
-                await Js.InvokeVoidAsync("ffsTheme.set", "dark");
-            }
+            var dark = stored != "light";
+            Theme.SetDark(dark);
+            await Js.InvokeVoidAsync("ffsTheme.set", dark ? "dark" : "light");
         }
         catch (JSException) { /* ignore */ }
         catch (InvalidOperationException) { /* ignore */ }
@@ -95,7 +123,6 @@ else
             if (showSplash)
             {
                 await Boot.EnsureStartedAsync();
-                // Mark after splash finishes — do not hide mid-animation
                 await Js.InvokeVoidAsync("ffsSplash.markSeen");
                 await Js.InvokeVoidAsync("ffsSplash.applyDocumentFlag");
                 await InvokeAsync(StateHasChanged);
@@ -103,11 +130,9 @@ else
         }
         catch (InvalidOperationException)
         {
-            // JS not ready yet — retry on next render; do not start splash
         }
         catch (JSException)
         {
-            // Prefer skip over forced splash if interop fails after connect
             Boot.ApplySplashCache(showSplash: false);
             _bootResolved = true;
             await InvokeAsync(StateHasChanged);
@@ -126,6 +151,9 @@ else
         catch { /* ignore */ }
     }
 
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        InvokeAsync(StateHasChanged);
+
     private void OnThemeChanged() => InvokeAsync(StateHasChanged);
     private void OnBootChanged() => InvokeAsync(StateHasChanged);
 
@@ -133,5 +161,6 @@ else
     {
         Theme.Changed -= OnThemeChanged;
         Boot.Changed -= OnBootChanged;
+        Nav.LocationChanged -= OnLocationChanged;
     }
 }
