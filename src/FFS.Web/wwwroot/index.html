@@ -28,6 +28,17 @@
     </div>
 
     <script>
+        window.ffsUser = {
+            get: function () {
+                try { return localStorage.getItem('ffs-user'); } catch (e) { return null; }
+            },
+            set: function (name) {
+                try {
+                    if (name) localStorage.setItem('ffs-user', name);
+                    else localStorage.removeItem('ffs-user');
+                } catch (e) { }
+            }
+        };
         window.ffsTheme = {
             set: function (theme) {
                 document.documentElement.setAttribute('data-theme', theme || 'light');
@@ -39,6 +50,137 @@
                 localStorage.setItem('ffs-theme', theme);
             }
         };
+        function ffsHexToRgba(hex, alpha) {
+            var h = String(hex || '').replace('#', '');
+            if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+            var n = parseInt(h, 16);
+            if (!isFinite(n)) return 'rgba(15, 23, 42,' + alpha + ')';
+            return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
+        }
+        window.ffsPalette = {
+            get: function () {
+                try { return localStorage.getItem('ffs-palette'); } catch (e) { return null; }
+            },
+            save: function (json) {
+                try { localStorage.setItem('ffs-palette', json); } catch (e) { }
+            },
+            apply: function (colors, dark) {
+                if (!colors) return;
+                var root = document.documentElement;
+                var map = {
+                    '--ffs-in': colors.moneyIn,
+                    '--ffs-out': colors.moneyOut,
+                    '--ffs-needs': colors.needs,
+                    '--ffs-wants': colors.wants,
+                    '--ffs-savings': colors.savings,
+                    '--ffs-over': colors.over,
+                    '--ffs-warning': colors.warning,
+                    '--ffs-success': colors.moneyIn,
+                    '--ffs-danger': colors.moneyOut,
+                    '--ffs-chart-1': colors.chart1,
+                    '--ffs-chart-2': colors.chart2,
+                    '--ffs-chart-3': colors.chart3,
+                    '--ffs-chart-4': colors.chart4,
+                    '--ffs-chart-5': colors.chart5,
+                    '--ffs-chart-6': colors.chart6
+                };
+                Object.keys(map).forEach(function (key) {
+                    if (map[key]) root.style.setProperty(key, map[key]);
+                });
+                var shadowHex = dark ? (colors.shadowDark || '#000000') : (colors.shadowLight || '#0f172a');
+                root.style.setProperty('--ffs-shadow-color', ffsHexToRgba(shadowHex, dark ? 0.55 : 0.32));
+            }
+        };
+        window.ffsPrefs = {
+            getVsLast: function () {
+                try { return localStorage.getItem('ffs-show-vs-last'); } catch (e) { return null; }
+            },
+            saveVsLast: function (on) {
+                try { localStorage.setItem('ffs-show-vs-last', on ? '1' : '0'); } catch (e) { }
+            }
+        };
+        window.ffsFormatAxis = function (value) {
+            var n = Number(value);
+            if (!isFinite(n)) return '';
+            var sign = n < 0 ? '-' : '';
+            var abs = Math.abs(n);
+            function trim(v) {
+                var t = v.toFixed(1);
+                return t.endsWith('.0') ? t.slice(0, -2) : t;
+            }
+            if (abs >= 1000000) return sign + 'R' + (abs >= 10000000 ? String(Math.round(abs / 1000000)) : trim(abs / 1000000)) + 'm';
+            if (abs >= 1000) return sign + 'R' + (abs >= 10000 ? String(Math.round(abs / 1000)) : trim(abs / 1000)) + 'k';
+            return sign + 'R' + String(Math.round(abs));
+        };
+        window.ffsFormatMoney = function (value) {
+            var n = Number(value);
+            if (!isFinite(n)) return '';
+            var parts = Math.abs(n).toFixed(2).split('.');
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+            return (n < 0 ? '-' : '') + 'R' + parts[0] + ',' + parts[1];
+        };
+        window.ffsChartTooltip = function (ctx) {
+            if (!ctx || ctx.dataPointIndex == null || ctx.dataPointIndex < 0) return '';
+            var series = ctx.series || [];
+            var idx = ctx.dataPointIndex;
+            var g = (ctx.w && ctx.w.globals) || {};
+            var names = g.seriesNames || [];
+            var colors = g.colors || [];
+            var labels = (g.labels && g.labels.length) ? g.labels : (g.categoryLabels || []);
+            var label = labels[idx] != null ? labels[idx] : '';
+            var only = -1;
+            try {
+                var base = g.dom && g.dom.baseEl;
+                var grid = base ? base.querySelector('.apexcharts-grid') : null;
+                if (grid && typeof window.ffsPointerY === 'number') {
+                    var rect = grid.getBoundingClientRect();
+                    var y = window.ffsPointerY - rect.top;
+                    var minY = Number(g.minY);
+                    var maxY = Number(g.maxY);
+                    var height = g.gridHeight || rect.height || 1;
+                    var span = (maxY - minY) || 1;
+                    var best = 1e9;
+                    for (var i = 0; i < series.length; i++) {
+                        var val = series[i][idx];
+                        if (val == null || isNaN(val)) continue;
+                        var pix = height - ((val - minY) / span) * height;
+                        var dist = Math.abs(pix - y);
+                        if (dist < best) { best = dist; only = i; }
+                    }
+                    if (best > 18) only = -1;
+                }
+            } catch (e) { only = -1; }
+            function esc(s) {
+                return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+                });
+            }
+            var html = '<div class="ffs-tip"><div class="ffs-tip-x">' + esc(label) + '</div>';
+            var shown = 0;
+            for (var j = 0; j < series.length; j++) {
+                if (only >= 0 && j !== only) continue;
+                var v = series[j][idx];
+                if (v == null || isNaN(v)) continue;
+                shown++;
+                html += '<div class="ffs-tip-row"><span class="ffs-tip-dot" style="background:' + (colors[j] || '#94a3b8') + '"></span><span>' + esc(names[j] || '') + '</span><strong>' + window.ffsFormatMoney(v) + '</strong></div>';
+            }
+            window.ffsLastChartHit = { index: idx, series: only };
+            return shown ? html + '</div>' : '';
+        };
+        window.ffsReadChartHit = function () {
+            return window.ffsLastChartHit || { index: -1, series: -1 };
+        };
+        window.ffsReportStyles = {
+            get: function () {
+                try { return localStorage.getItem('ffs-report-styles'); } catch (e) { return null; }
+            },
+            save: function (json) {
+                try { localStorage.setItem('ffs-report-styles', json); } catch (e) { }
+            }
+        };
+        document.addEventListener('mousemove', function (e) {
+            window.ffsPointerY = e.clientY;
+        }, true);
         window.ffsSplash = {
             /** Once per browser tab — survives F5 / hard refresh until the tab is closed. */
             shouldShow: function () {
@@ -74,8 +216,13 @@
         try {
             var theme = localStorage.getItem('ffs-theme') || 'dark';
             document.documentElement.setAttribute('data-theme', theme);
+            var rawPalette = localStorage.getItem('ffs-palette');
+            if (rawPalette) window.ffsPalette.apply(JSON.parse(rawPalette), theme !== 'light');
         } catch (e) { }
     </script>
+    <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
+    <script src="_content/PSC.Blazor.Components.Chartjs/lib/Chart.js/chart.js"></script>
+    <script src="_content/PSC.Blazor.Components.Chartjs/Chart.js" type="module"></script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
 </body>
 

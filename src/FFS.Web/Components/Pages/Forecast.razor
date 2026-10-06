@@ -1,6 +1,7 @@
 @page "/forecast"
 @inject SimpleProjectionService ProjectionSvc
 @inject ThemeService Theme
+@inject PaletteService Palette
 @implements IDisposable
 
 <PageTitle>@AppBrand.Name · Forecast</PageTitle>
@@ -9,16 +10,16 @@
     <div>
         <div class="eyebrow">Forecast</div>
         <h1>Simple Projection</h1>
-        <p>An experimental average-based outlook — not the final @AppBrand.Name forecasting engine.</p>
+        <p>An experimental average-based outlook for you — not the final @AppBrand.Name forecasting engine.</p>
     </div>
     <div class="hero-meta">
-        <span class="pill"><i class="bi bi-calendar3"></i> @DateTime.Today.ToString("MMM yyyy") – @DateTime.Today.AddMonths(_months).ToString("MMM yyyy")</span>
+        <DateRangePills From="DateTime.Today" To="DateTime.Today.AddMonths(_months)" Format="MMM yyyy" />
     </div>
 </div>
 
 <div class="notice">
     <i class="bi bi-exclamation-triangle"></i>
-    Simple Projection — projected figures use the average of recent Money In / Money Out
+    Simple Projection — your projected figures use the average of your recent Money In and Money Out
     (last 3 months, excluding transfers and ignored transactions). This is a learning prototype, not an intelligent prediction.
 </div>
 
@@ -26,7 +27,7 @@
     <KpiCard Label="Current balance (est.)" Value="@MoneyFormat.Zar(_result.CurrentBalance)" Icon="bi-wallet2" Caption="@($"As of {DateTime.Today:d MMM yyyy}")" />
     <KpiCard Label="Avg monthly income" Value="@MoneyFormat.Zar(_result.AvgMonthlyIncome)" Icon="bi-arrow-up" Tone="success" Caption="Based on last 3 months" />
     <KpiCard Label="Avg monthly expenses" Value="@MoneyFormat.Zar(_result.AvgMonthlyExpenses)" Icon="bi-arrow-down" Tone="error" Caption="Based on last 3 months" />
-    <KpiCard Label="@($"Projected balance ({_months} mo)")" Value="@MoneyFormat.Zar(_result.ProjectedBalance)" Icon="bi-graph-up-arrow" Tone="accent" Caption="If trend continues" />
+    <KpiCard Label="@($"Projected balance ({_months} mo)")" Value="@MoneyFormat.Zar(_result.ProjectedBalance)" Icon="bi-graph-up-arrow" Tone="neutral" Caption="If trend continues" />
     <KpiCard Label="Projection period" Value="@($"{_months} months")" Icon="bi-calendar3" Caption="@($"{DateTime.Today:MMM yyyy} – {DateTime.Today.AddMonths(_months):MMM yyyy}")" />
 </div>
 
@@ -35,7 +36,7 @@
         <div class="card-header">
             <div>
                 <h3><i class="bi bi-graph-up"></i> Projected balance path</h3>
-                <p class="muted small">Estimated account balance over the next @_months months using average cash flow.</p>
+                <p class="muted small">Your estimated balance over the next @_months months, using your average cash flow.</p>
             </div>
             <div class="chip-row under-title" style="margin:0;">
                 <button type="button" class="chip @(_months == 3 ? "active" : null)" @onclick="Months3">3</button>
@@ -43,7 +44,7 @@
                 <button type="button" class="chip @(_months == 12 ? "active" : null)" @onclick="Months12">12</button>
             </div>
         </div>
-        <ApexChart @key="@($"proj-{_chartKey}-{Theme.IsDark}")" TItem="ProjectionPoint" Height="300" Options="_chartOptions">
+        <ApexChart @key="@($"proj-{_chartKey}-{Theme.IsDark}-{Palette.Revision}")" TItem="ProjectionPoint" Height="300" Options="_chartOptions">
             <ApexPointSeries TItem="ProjectionPoint" Items="_result.Points.ToList()" Name="Projected balance"
                              SeriesType="SeriesType.Area" XValue="@(e => e.Label)" YValue="@(e => e.Balance)" />
         </ApexChart>
@@ -61,21 +62,21 @@
 
 <div class="grid-3" style="margin-top:1rem;">
     <div class="card">
-        <h3><i class="bi bi-lightbulb"></i> What this could mean</h3>
+        <h3><i class="bi bi-lightbulb"></i> What this could mean for you</h3>
         <p class="muted small">Positive trend — your projected balance is increasing by @MoneyFormat.Zar(_result.AvgMonthlyIncome - _result.AvgMonthlyExpenses) per month.</p>
-        <p class="muted small">Build momentum — if current habits continue, you could reach @MoneyFormat.Zar(_result.ProjectedBalance) in @_months months.</p>
+        <p class="muted small">Build momentum — if your current habits continue, you could reach @MoneyFormat.Zar(_result.ProjectedBalance) in @_months months.</p>
     </div>
     <div class="card">
         <h3><i class="bi bi-bar-chart"></i> Key numbers</h3>
-        <div class="list-row"><span>Total projected income</span><span class="amount in">@MoneyFormat.Zar(_result.ProjectedIncome)</span></div>
-        <div class="list-row"><span>Total projected expenses</span><span class="amount out">@MoneyFormat.Zar(_result.ProjectedExpenses)</span></div>
-        <div class="list-row"><span>Projected net cash flow</span><span class="amount in">@MoneyFormat.Zar(_result.ProjectedIncome - _result.ProjectedExpenses)</span></div>
-        <div class="list-row"><span>Projected end balance</span><span class="amount">@MoneyFormat.Zar(_result.ProjectedBalance)</span></div>
+        <div class="list-row"><span>Your total projected income</span><span class="amount in">@MoneyFormat.Zar(_result.ProjectedIncome)</span></div>
+        <div class="list-row"><span>Your total projected expenses</span><span class="amount out">@MoneyFormat.Zar(_result.ProjectedExpenses)</span></div>
+        <div class="list-row"><span>Your projected net cash flow</span><span class="amount in">@MoneyFormat.Zar(_result.ProjectedIncome - _result.ProjectedExpenses)</span></div>
+        <div class="list-row"><span>Your projected end balance</span><span class="amount">@MoneyFormat.Zar(_result.ProjectedBalance)</span></div>
     </div>
     <div class="card">
         <h3><i class="bi bi-info-circle"></i> Keep in mind</h3>
-        <p class="muted small">This is a learning prototype. The forecast uses simple averages and does not account for seasonality or irregular charges.</p>
-        <p class="muted small">Not financial advice — these projections are for informational purposes only.</p>
+        <p class="muted small">This is a learning prototype. Your forecast uses simple averages and does not account for seasonality or irregular charges.</p>
+        <p class="muted small">These projections are for you to look at. They are not financial advice.</p>
     </div>
 </div>
 
@@ -88,6 +89,7 @@
     protected override void OnInitialized()
     {
         Theme.Changed += OnThemeChanged;
+        Palette.Changed += OnThemeChanged;
         Reload();
     }
 
@@ -120,5 +122,9 @@
         _chartOptions = ChartThemeOptions.Create<ProjectionPoint>(Theme.IsDark, ChartThemeOptions.ApplyForecastArea);
     }
 
-    public void Dispose() => Theme.Changed -= OnThemeChanged;
+    public void Dispose()
+    {
+        Theme.Changed -= OnThemeChanged;
+        Palette.Changed -= OnThemeChanged;
+    }
 }

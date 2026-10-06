@@ -37,13 +37,16 @@
         <label>Search</label>
         <input type="text" value="@_search" @oninput="OnSearchInput" placeholder="Merchant, description, category, bank…" />
     </div>
-    <div>
-        <label>From</label>
-        <input type="date" @bind="_startDate" @bind:after="Refresh" />
-    </div>
-    <div>
-        <label>To</label>
-        <input type="date" @bind="_endDate" @bind:after="Refresh" />
+    <div class="date-pair">
+        <div>
+            <label>From</label>
+            <input type="date" @bind="_startDate" @bind:after="Refresh" />
+        </div>
+        <span class="date-sep" aria-hidden="true"></span>
+        <div>
+            <label>To</label>
+            <input type="date" @bind="_endDate" @bind:after="Refresh" />
+        </div>
     </div>
     <div>
         <label>Account</label>
@@ -114,7 +117,7 @@
              Delta="@_inDelta" DeltaUp="@_inUp" Caption="@($"{inCount} transactions")" />
     <KpiCard Label="Money out" Value="@MoneyFormat.Zar(moneyOut)" Icon="bi-arrow-down" Tone="error"
              Delta="@_outDelta" DeltaUp="@_outUp" Caption="@($"{outCount} transactions · vs previous period")" />
-    <KpiCard Label="Transfers" Value="@MoneyFormat.Zar(transfers)" Icon="bi-arrow-left-right" Tone="accent"
+    <KpiCard Label="Transfers" Value="@MoneyFormat.Zar(transfers)" Icon="bi-arrow-left-right" Tone="neutral"
              Caption="@($"{transferCount} transactions")" />
     <KpiCard Label="Total transactions" Value="@rows.Count.ToString()" Icon="bi-pie-chart"
              Caption="@RangeCaption()" />

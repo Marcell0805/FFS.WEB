@@ -4,7 +4,11 @@
 @inject CsvExportService Export
 @inject NavigationManager Nav
 @inject ThemeService Theme
+@inject PaletteService Palette
+@inject IFinancialDataProvider Data
 @inject IJSRuntime Js
+@using System.Globalization
+@using System.Text.Json
 @implements IDisposable
 @using FFS.Domain
 @using FFS.Domain.Enums
@@ -14,11 +18,11 @@
 <div class="page-hero">
     <div>
         <div class="eyebrow">Reports</div>
-        <h1>Analyse the numbers</h1>
-        <p>Income, spending and merchant patterns using the same cash-flow rules as FFS Mobile.</p>
+        <h1>Analyse your numbers</h1>
+        <p>Your income, spending and merchant patterns, using the same cash-flow rules as FFS Mobile.</p>
     </div>
     <div class="hero-meta">
-        <span class="pill"><i class="bi bi-calendar3"></i> @_start.ToString("d MMM yyyy") – @_end.ToString("d MMM yyyy")</span>
+        <DateRangePills From="_start" To="_end" />
         <button type="button" class="secondary" @onclick="DownloadExport"><i class="bi bi-download"></i> Export</button>
     </div>
 </div>
@@ -42,7 +46,7 @@
              Delta="@_inDelta" DeltaUp="@_inUp" Caption="@($"{_cash.TransactionCount} transactions")" Clickable="true" OnClick="DrillIncome" />
     <KpiCard Label="Spending" Value="@MoneyFormat.Zar(_cash.MoneyOut)" Icon="bi-arrow-down" Tone="error"
              Delta="@_outDelta" DeltaUp="@_outUp" Caption="vs previous period" Clickable="true" OnClick="DrillSpending" />
-    <KpiCard Label="Net cash flow" Value="@MoneyFormat.Zar(_cash.Net)" Icon="bi-diagram-3" Tone="accent"
+    <KpiCard Label="Net cash flow" Value="@MoneyFormat.Zar(_cash.Net)" Icon="bi-diagram-3" Tone="neutral"
              Delta="@_netDelta" DeltaUp="@_netUp" Caption="@($"{_cash.TransactionCount} transactions")" />
 </div>
 
@@ -51,36 +55,72 @@
 <div class="grid-2">
     @if (Show("bars"))
     {
-    <div class="card chart-card">
+    <div class="card chart-card chart-drill">
         <div class="card-header">
             <div>
                 <h3><i class="bi bi-bar-chart"></i> Income vs Spending</h3>
-                <p class="muted small">Monthly totals over the selected period.</p>
+                <p class="muted small">Your monthly totals over the selected period. Click a bar or point to open those transactions.</p>
+            </div>
+            <div class="chart-styles">
+                @foreach (var style in _barStyles)
+                {
+                    <button type="button" class="chip @(_bars == style.Id ? "active" : null)" @onclick="() => SetBars(style.Id)">@style.Label</button>
+                }
             </div>
         </div>
-        <ApexChart @key="@($"ivs-{_chartKey}-{Theme.IsDark}")" TItem="MonthlyTrendPoint" Height="280" Options="ColumnOptions()">
-            <ApexPointSeries TItem="MonthlyTrendPoint" Items="_monthly" Name="Money In" SeriesType="SeriesType.Bar"
-                             XValue="@(e => e.Month)" YValue="@(e => e.MoneyIn)" />
-            <ApexPointSeries TItem="MonthlyTrendPoint" Items="_monthly" Name="Money Out" SeriesType="SeriesType.Bar"
-                             XValue="@(e => e.Month)" YValue="@(e => e.MoneyOut)" />
-        </ApexChart>
+        @if (_bars is "line" or "area")
+        {
+            <ApexChart @key="@($"ivs-{_bars}-{_chartKey}-{Theme.IsDark}-{Palette.Revision}")" TItem="MonthlyTrendPoint" Height="280" Options="BarsOptions()" OnClick="OnBarsPlot">
+                <ApexPointSeries TItem="MonthlyTrendPoint" Items="_monthly" Name="Money In" SeriesType="@FlowSeries(_bars)"
+                                 XValue="@(e => e.Month)" YValue="@(e => e.MoneyIn)" />
+                <ApexPointSeries TItem="MonthlyTrendPoint" Items="_monthly" Name="Money Out" SeriesType="@FlowSeries(_bars)"
+                                 XValue="@(e => e.Month)" YValue="@(e => e.MoneyOut)" />
+            </ApexChart>
+        }
+        else
+        {
+            <ApexChart @key="@($"ivs-{_bars}-{_chartKey}-{Theme.IsDark}-{Palette.Revision}")" TItem="MonthlyTrendPoint" Height="280" Options="BarsOptions()" OnDataPointSelection="OnBarsPoint">
+                <ApexPointSeries TItem="MonthlyTrendPoint" Items="_monthly" Name="Money In" SeriesType="SeriesType.Bar"
+                                 XValue="@(e => e.Month)" YValue="@(e => e.MoneyIn)" />
+                <ApexPointSeries TItem="MonthlyTrendPoint" Items="_monthly" Name="Money Out" SeriesType="SeriesType.Bar"
+                                 XValue="@(e => e.Month)" YValue="@(e => e.MoneyOut)" />
+            </ApexChart>
+        }
     </div>
     }
     @if (Show("daily"))
     {
-    <div class="card chart-card">
+    <div class="card chart-card chart-drill">
         <div class="card-header">
             <div>
                 <h3><i class="bi bi-activity"></i> Daily cash flow</h3>
-                <p class="muted small">Income vs expenses by day.</p>
+                <p class="muted small">Your income and expenses by day. Click a point to open that day.</p>
+            </div>
+            <div class="chart-styles">
+                @foreach (var style in _dailyStyles)
+                {
+                    <button type="button" class="chip @(_dailyStyle == style.Id ? "active" : null)" @onclick="() => SetDaily(style.Id)">@style.Label</button>
+                }
             </div>
         </div>
-        <ApexChart @key="@($"daily-{_chartKey}-{Theme.IsDark}")" TItem="DailyCashFlowPoint" Height="280" Options="AreaOptions<DailyCashFlowPoint>()">
-            <ApexPointSeries TItem="DailyCashFlowPoint" Items="_daily" Name="Money In" SeriesType="SeriesType.Area"
-                             XValue="@(e => e.Label)" YValue="@(e => e.MoneyIn)" />
-            <ApexPointSeries TItem="DailyCashFlowPoint" Items="_daily" Name="Money Out" SeriesType="SeriesType.Area"
-                             XValue="@(e => e.Label)" YValue="@(e => e.MoneyOut)" />
-        </ApexChart>
+        @if (_dailyStyle == "columns")
+        {
+            <ApexChart @key="@($"daily-{_dailyStyle}-{_chartKey}-{Theme.IsDark}-{Palette.Revision}")" TItem="DailyCashFlowPoint" Height="280" Options="DailyOptions()" OnDataPointSelection="OnDailyPoint">
+                <ApexPointSeries TItem="DailyCashFlowPoint" Items="_daily" Name="Money In" SeriesType="SeriesType.Bar"
+                                 XValue="@(e => e.Label)" YValue="@(e => e.MoneyIn)" />
+                <ApexPointSeries TItem="DailyCashFlowPoint" Items="_daily" Name="Money Out" SeriesType="SeriesType.Bar"
+                                 XValue="@(e => e.Label)" YValue="@(e => e.MoneyOut)" />
+            </ApexChart>
+        }
+        else
+        {
+            <ApexChart @key="@($"daily-{_dailyStyle}-{_chartKey}-{Theme.IsDark}-{Palette.Revision}")" TItem="DailyCashFlowPoint" Height="280" Options="DailyOptions()" OnClick="OnDailyPlot">
+                <ApexPointSeries TItem="DailyCashFlowPoint" Items="_daily" Name="Money In" SeriesType="@FlowSeries(_dailyStyle)"
+                                 XValue="@(e => e.Label)" YValue="@(e => e.MoneyIn)" />
+                <ApexPointSeries TItem="DailyCashFlowPoint" Items="_daily" Name="Money Out" SeriesType="@FlowSeries(_dailyStyle)"
+                                 XValue="@(e => e.Label)" YValue="@(e => e.MoneyOut)" />
+            </ApexChart>
+        }
     </div>
     }
 </div>
@@ -92,7 +132,7 @@
     <div class="card-header">
         <div>
             <h3><i class="bi bi-bank"></i> Spending by bank</h3>
-            <p class="muted small">Money out grouped by the account’s institution.</p>
+            <p class="muted small">Your money out, grouped by your account’s institution.</p>
         </div>
     </div>
     @if (_banks.Count == 0)
@@ -123,11 +163,17 @@
 <div class="grid-3 reports-bottom">
     @if (Show("category"))
     {
-    <div class="card chart-card">
+    <div class="card chart-card chart-drill">
         <div class="card-header">
             <div>
                 <h3><i class="bi bi-pie-chart"></i> Spending by category</h3>
-                <p class="muted small">Click a category to filter transactions.</p>
+                <p class="muted small">Click a slice or bar to open that category.</p>
+            </div>
+            <div class="chart-styles">
+                @foreach (var style in _categoryStyles)
+                {
+                    <button type="button" class="chip @(_category == style.Id ? "active" : null)" @onclick="() => SetCategory(style.Id)">@style.Label</button>
+                }
             </div>
         </div>
         @if (_byCategory.Count == 0)
@@ -137,8 +183,8 @@
         else
         {
             <div class="donut-split">
-                <ApexChart @key="@($"cat-{_chartKey}-{Theme.IsDark}")" TItem="CategoryTotal" Height="200" Options="DonutOptions()">
-                    <ApexPointSeries TItem="CategoryTotal" Items="_byCategory" Name="Spend" SeriesType="SeriesType.Donut"
+                <ApexChart @key="@($"cat-{_category}-{_chartKey}-{Theme.IsDark}-{Palette.Revision}")" TItem="CategoryTotal" Height="@(_category == "bars" ? 260 : 200)" Options="CategoryOptions()" OnDataPointSelection="OnCategoryPoint">
+                    <ApexPointSeries TItem="CategoryTotal" Items="_byCategory" Name="Spend" SeriesType="@(_category == "bars" ? SeriesType.Bar : SeriesType.Donut)"
                                      XValue="@(e => e.CategoryName)" YValue="@(e => e.Total)" />
                 </ApexChart>
                 <div class="legend-list">
@@ -147,7 +193,7 @@
                     {
                         var pct = _cash.MoneyOut <= 0 ? 0 : (row.Total / _cash.MoneyOut) * 100;
                         <div class="legend-row clickable" @onclick="() => DrillCategory(row)">
-                            <span class="swatch s-@i"></span>
+                            <span class="swatch" style="background:@Palette.Colors.ChartAt(i)"></span>
                             <span class="meter-copy">
                                 <span>@row.CategoryName</span>
                                 <span class="meter-track" aria-hidden="true"><span class="meter-fill" style="width:@Meter(pct)"></span></span>
@@ -189,18 +235,24 @@
     }
     @if (Show("trends"))
     {
-    <div class="card chart-card">
+    <div class="card chart-card chart-drill">
         <div class="card-header">
             <div>
                 <h3><i class="bi bi-graph-up"></i> Spending trends</h3>
-                <p class="muted small">Category trends over time.</p>
+                <p class="muted small">Category trends over time. Click a point to open that category for that month.</p>
+            </div>
+            <div class="chart-styles">
+                @foreach (var style in _trendStyles)
+                {
+                    <button type="button" class="chip @(_trends == style.Id ? "active" : null)" @onclick="() => SetTrends(style.Id)">@style.Label</button>
+                }
             </div>
         </div>
-        <ApexChart @key="@($"ctrend-{_chartKey}-{Theme.IsDark}")" TItem="CategoryMonthPoint" Height="260" Options="TrendOptions()">
+        <ApexChart @key="@($"ctrend-{_trends}-{_chartKey}-{Theme.IsDark}-{Palette.Revision}")" TItem="CategoryMonthPoint" Height="260" Options="TrendOptions()" OnClick="OnTrendPlot">
             @foreach (var name in _trendCats)
             {
                 var items = _catTrend.Where(x => x.CategoryName == name).ToList();
-                <ApexPointSeries TItem="CategoryMonthPoint" Items="items" Name="@name" SeriesType="SeriesType.Line"
+                <ApexPointSeries TItem="CategoryMonthPoint" Items="items" Name="@name" SeriesType="@(_trends == "area" ? SeriesType.Area : SeriesType.Line)"
                                  XValue="@(e => e.Month)" YValue="@(e => e.Total)" />
             }
         </ApexChart>
@@ -225,6 +277,16 @@
     private List<CategoryMonthPoint> _catTrend = [];
     private List<string> _trendCats = [];
     private readonly HashSet<string> _hidden = [];
+    private string _bars = "columns";
+    private string _dailyStyle = "area";
+    private string _category = "donut";
+    private string _trends = "line";
+    private bool _stylesLoaded;
+    private static readonly (string Id, string Label)[] _barStyles = [("columns", "Columns"), ("stacked", "Stacked"), ("line", "Line"), ("area", "Area")];
+    private static readonly (string Id, string Label)[] _dailyStyles = [("area", "Area"), ("line", "Line"), ("columns", "Columns")];
+    private static readonly (string Id, string Label)[] _categoryStyles = [("donut", "Donut"), ("bars", "Bars")];
+    private static readonly (string Id, string Label)[] _trendStyles = [("line", "Line"), ("area", "Area")];
+    private static readonly JsonSerializerOptions StyleJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
     private static readonly (string Id, string Label)[] _charts =
     [
         ("bars", "Income vs spending"),
@@ -246,6 +308,7 @@
     protected override void OnInitialized()
     {
         Theme.Changed += OnThemeChanged;
+        Palette.Changed += OnThemeChanged;
         Reload();
     }
 
@@ -255,17 +318,135 @@
         InvokeAsync(StateHasChanged);
     }
 
-    private ApexChartOptions<MonthlyTrendPoint> ColumnOptions() =>
-        ChartThemeOptions.Create<MonthlyTrendPoint>(Theme.IsDark, ChartThemeOptions.ApplyColumns);
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _stylesLoaded) return;
+        _stylesLoaded = true;
+        try
+        {
+            var json = await Js.InvokeAsync<string?>("ffsReportStyles.get");
+            if (string.IsNullOrWhiteSpace(json)) return;
+            var saved = JsonSerializer.Deserialize<ReportStylePrefs>(json, StyleJson);
+            if (saved is null) return;
+            _bars = Pick(saved.Bars, _barStyles, _bars);
+            _dailyStyle = Pick(saved.Daily, _dailyStyles, _dailyStyle);
+            _category = Pick(saved.Category, _categoryStyles, _category);
+            _trends = Pick(saved.Trends, _trendStyles, _trends);
+            StateHasChanged();
+        }
+        catch { /* keep the defaults */ }
+    }
 
-    private ApexChartOptions<T> AreaOptions<T>() where T : class =>
-        ChartThemeOptions.Create<T>(Theme.IsDark, ChartThemeOptions.ApplyCashFlowArea);
+    private static string Pick(string? value, (string Id, string Label)[] allowed, string fallback) =>
+        allowed.Any(s => s.Id == value) ? value! : fallback;
 
-    private ApexChartOptions<CategoryTotal> DonutOptions() =>
-        ChartThemeOptions.Create<CategoryTotal>(Theme.IsDark, o => ChartThemeOptions.ApplyDonut(o, "Total spent"));
+    private Task SetBars(string id) => SaveStyle(() => _bars = id);
+    private Task SetDaily(string id) => SaveStyle(() => _dailyStyle = id);
+    private Task SetCategory(string id) => SaveStyle(() => _category = id);
+    private Task SetTrends(string id) => SaveStyle(() => _trends = id);
+
+    private async Task SaveStyle(Action apply)
+    {
+        apply();
+        _chartKey++;
+        try
+        {
+            var json = JsonSerializer.Serialize(new ReportStylePrefs(_bars, _dailyStyle, _category, _trends), StyleJson);
+            await Js.InvokeVoidAsync("ffsReportStyles.save", json);
+        }
+        catch { /* the choice still applies for this visit */ }
+    }
+
+    private static SeriesType FlowSeries(string style) =>
+        style == "area" ? SeriesType.Area : SeriesType.Line;
+
+    private ApexChartOptions<MonthlyTrendPoint> BarsOptions() =>
+        _bars switch
+        {
+            "area" => ChartThemeOptions.Create<MonthlyTrendPoint>(Theme.IsDark, ChartThemeOptions.ApplyCashFlowArea),
+            "line" => ChartThemeOptions.Create<MonthlyTrendPoint>(Theme.IsDark, ChartThemeOptions.ApplyCashFlowLine),
+            _ => ChartThemeOptions.Create<MonthlyTrendPoint>(Theme.IsDark, o => ChartThemeOptions.ApplyColumns(o, _bars == "stacked"))
+        };
+
+    private ApexChartOptions<DailyCashFlowPoint> DailyOptions() =>
+        _dailyStyle switch
+        {
+            "columns" => ChartThemeOptions.Create<DailyCashFlowPoint>(Theme.IsDark, o => ChartThemeOptions.ApplyColumns(o, false)),
+            "line" => ChartThemeOptions.Create<DailyCashFlowPoint>(Theme.IsDark, ChartThemeOptions.ApplyCashFlowLine),
+            _ => ChartThemeOptions.Create<DailyCashFlowPoint>(Theme.IsDark, ChartThemeOptions.ApplyCashFlowArea)
+        };
+
+    private ApexChartOptions<CategoryTotal> CategoryOptions() =>
+        _category == "bars"
+            ? ChartThemeOptions.Create<CategoryTotal>(Theme.IsDark, ChartThemeOptions.ApplyCategoryBars)
+            : ChartThemeOptions.Create<CategoryTotal>(Theme.IsDark, o => ChartThemeOptions.ApplyDonut(o, "Total spent"));
 
     private ApexChartOptions<CategoryMonthPoint> TrendOptions() =>
-        ChartThemeOptions.Create<CategoryMonthPoint>(Theme.IsDark, ChartThemeOptions.ApplyCategoryLines);
+        ChartThemeOptions.Create<CategoryMonthPoint>(Theme.IsDark, _trends == "area" ? ChartThemeOptions.ApplyCategoryArea : ChartThemeOptions.ApplyCategoryLines);
+
+    private void OnBarsPoint(SelectedData<MonthlyTrendPoint> selected) =>
+        ChartNavigation.OpenMonth(Nav, _monthly, selected.DataPointIndex, selected.SeriesIndex);
+
+    private async Task OnBarsPlot(SelectedData<MonthlyTrendPoint> _)
+    {
+        var hit = await Js.InvokeAsync<ChartHit>("ffsReadChartHit");
+        ChartNavigation.OpenMonth(Nav, _monthly, hit.Index, hit.Series);
+    }
+
+    private void OnDailyPoint(SelectedData<DailyCashFlowPoint> selected) =>
+        ChartNavigation.OpenDay(Nav, _daily, selected.DataPointIndex, selected.SeriesIndex);
+
+    private async Task OnDailyPlot(SelectedData<DailyCashFlowPoint> _)
+    {
+        var hit = await Js.InvokeAsync<ChartHit>("ffsReadChartHit");
+        ChartNavigation.OpenDay(Nav, _daily, hit.Index, hit.Series);
+    }
+
+    private void OnCategoryPoint(SelectedData<CategoryTotal> selected)
+    {
+        var index = selected.DataPointIndex >= 0 ? selected.DataPointIndex : selected.SeriesIndex;
+        if (index < 0 || index >= _byCategory.Count) return;
+        DrillCategory(_byCategory[index]);
+    }
+
+    private async Task OnTrendPlot(SelectedData<CategoryMonthPoint> _)
+    {
+        var hit = await Js.InvokeAsync<ChartHit>("ffsReadChartHit");
+        if (hit.Index < 0) return;
+        if (hit.Series >= 0 && hit.Series < _trendCats.Count)
+        {
+            DrillTrend(_trendCats[hit.Series], hit.Index);
+            return;
+        }
+
+        if (_trendCats.Count == 0) return;
+        var items = _catTrend.Where(x => x.CategoryName == _trendCats[0]).ToList();
+        if (hit.Index >= items.Count) return;
+        OpenMonthSpend(items[hit.Index].Month, categoryId: null);
+    }
+
+    private void DrillTrend(string name, int index)
+    {
+        var items = _catTrend.Where(x => x.CategoryName == name).ToList();
+        if (index < 0 || index >= items.Count) return;
+        var category = Data.Categories.FirstOrDefault(c => c.Name == name);
+        OpenMonthSpend(items[index].Month, category?.Id);
+    }
+
+    private void OpenMonthSpend(string label, long? categoryId)
+    {
+        if (!TryMonth(label, out var start)) return;
+        Nav.NavigateTo(ChartNavigation.Url(start, start.AddMonths(1).AddDays(-1), series: 1, categoryId));
+    }
+
+    private static bool TryMonth(string label, out DateTime start)
+    {
+        if (DateTime.TryParseExact(label, "MMM yyyy", CultureInfo.CurrentCulture, DateTimeStyles.None, out start))
+            return true;
+        return DateTime.TryParseExact(label, "MMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out start);
+    }
+
+    private sealed record ReportStylePrefs(string Bars, string Daily, string Category, string Trends);
 
     private static string Meter(decimal pct) =>
         $"{Math.Clamp(pct, 0, 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%";
@@ -330,5 +511,9 @@
     private static string TxnUrl(string query) => $"transactions?{query}";
     private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
 
-    public void Dispose() => Theme.Changed -= OnThemeChanged;
+    public void Dispose()
+    {
+        Theme.Changed -= OnThemeChanged;
+        Palette.Changed -= OnThemeChanged;
+    }
 }

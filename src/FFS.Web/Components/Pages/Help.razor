@@ -3,7 +3,7 @@
 
 <PageTitle>@AppBrand.Name · Help</PageTitle>
 
-<PageHeader Eyebrow="Help" Title="Answers" Subtitle="Search the same questions as the app listing." />
+<PageHeader Eyebrow="Help" Title="Answers" Subtitle="Search in your own words. Close wording and small typos still find an answer." />
 
 <label class="catalog-search help-search">
     <span class="visually-hidden">Search help</span>
@@ -16,7 +16,7 @@
 }
 else if (Visible.Count == 0)
 {
-    <p class="muted">Nothing matches that search.</p>
+    <p class="muted">Nothing matches that search. Try a shorter word, like import or export.</p>
 }
 else
 {
@@ -32,17 +32,15 @@ else
 @code {
     private string _query = "";
     private bool _loaded;
-    private List<FaqItem> _items = [];
+    private List<FaqEntry> _items = [];
 
-    private IReadOnlyList<FaqItem> Visible
+    private IReadOnlyList<FaqEntry> Visible
     {
         get
         {
             var q = _query.Trim();
             if (q.Length == 0) return _items;
-            return _items.Where(i =>
-                i.Question.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                i.Answer.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+            return FaqSearch.Rank(_items, q).Select(h => h.Entry).ToList();
         }
     }
 
@@ -51,7 +49,7 @@ else
         try
         {
             var text = await Http.GetStringAsync("data/faq.md");
-            _items = Parse(text);
+            _items = FaqSearch.Parse(text);
         }
         catch
         {
@@ -62,36 +60,4 @@ else
             _loaded = true;
         }
     }
-
-    private static List<FaqItem> Parse(string text)
-    {
-        var items = new List<FaqItem>();
-        string? question = null;
-        var body = new List<string>();
-
-        void Flush()
-        {
-            if (string.IsNullOrWhiteSpace(question)) return;
-            items.Add(new FaqItem(question.Trim(), string.Join("\n", body).Trim()));
-            body.Clear();
-        }
-
-        foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
-        {
-            if (line.StartsWith("# ", StringComparison.Ordinal))
-            {
-                Flush();
-                question = line[2..];
-                continue;
-            }
-
-            if (question is not null)
-                body.Add(line);
-        }
-
-        Flush();
-        return items;
-    }
-
-    private sealed record FaqItem(string Question, string Answer);
 }

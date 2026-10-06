@@ -1,0 +1,12 @@
+<span class="pill date-range">
+    <i class="bi bi-calendar3" aria-hidden="true"></i>
+    <span>@From.ToString(Format)</span>
+    <span class="date-sep" aria-hidden="true"></span>
+    <span>@To.ToString(Format)</span>
+</span>
+
+@code {
+    [Parameter] public DateTime From { get; set; }
+    [Parameter] public DateTime To { get; set; }
+    [Parameter] public string Format { get; set; } = "d MMM yyyy";
+}

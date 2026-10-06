@@ -1,0 +1,237 @@
+@inject ReportingService Reporting
+@inject FFS.Web.Services.ThemeService Theme
+@inject PaletteService Palette
+@implements IDisposable
+@using PSC.Blazor.Components.Chartjs
+@using PSC.Blazor.Components.Chartjs.Models.Bar
+@using PSC.Blazor.Components.Chartjs.Models.Common
+@using PSC.Blazor.Components.Chartjs.Models.Doughnut
+@using PSC.Blazor.Components.Chartjs.Models.Line
+@using Radzen
+@using Radzen.Blazor
+
+<section class="settings-group">
+    <h3>Chart packages</h3>
+    <p class="muted">The same sample, drawn three ways. Reports stays on ApexCharts. These copies do not open transactions.</p>
+
+    <h4 class="test-pack">ApexCharts</h4>
+    <p class="muted small test-chart-note">The charts already on Home, Reports, and Forecast. Smooth finance charts, with the hover tooltip this app uses.</p>
+    <div class="grid-3 test-chart-grid">
+        <div class="card chart-card">
+            <h3>Monthly cash flow</h3>
+            <ApexChart @key="@Key("apex-m")" TItem="MonthlyTrendPoint" Height="220" Options="_apexColumns">
+                <ApexPointSeries TItem="MonthlyTrendPoint" Items="_monthly" Name="Money in" SeriesType="SeriesType.Bar" XValue="@(e => e.Month)" YValue="@(e => e.MoneyIn)" />
+                <ApexPointSeries TItem="MonthlyTrendPoint" Items="_monthly" Name="Money out" SeriesType="SeriesType.Bar" XValue="@(e => e.Month)" YValue="@(e => e.MoneyOut)" />
+            </ApexChart>
+        </div>
+        <div class="card chart-card">
+            <h3>Daily cash flow</h3>
+            <ApexChart @key="@Key("apex-d")" TItem="DailyCashFlowPoint" Height="220" Options="_apexArea">
+                <ApexPointSeries TItem="DailyCashFlowPoint" Items="_daily" Name="Money in" SeriesType="SeriesType.Area" XValue="@(e => e.Label)" YValue="@(e => e.MoneyIn)" />
+                <ApexPointSeries TItem="DailyCashFlowPoint" Items="_daily" Name="Money out" SeriesType="SeriesType.Area" XValue="@(e => e.Label)" YValue="@(e => e.MoneyOut)" />
+            </ApexChart>
+        </div>
+        <div class="card chart-card">
+            <h3>Spending by category</h3>
+            <ApexChart @key="@Key("apex-c")" TItem="CategoryTotal" Height="220" Options="_apexDonut">
+                <ApexPointSeries TItem="CategoryTotal" Items="_categories" Name="Spent" SeriesType="SeriesType.Donut" XValue="@(e => e.CategoryName)" YValue="@(e => e.Total)" />
+            </ApexChart>
+        </div>
+    </div>
+
+    <h4 class="test-pack">Chart.js</h4>
+    <p class="muted small test-chart-note">MIT. A widely used web chart library, through PSC.Blazor.Components.Chartjs. Clean bars, lines, and doughnuts.</p>
+    <div class="grid-3 test-chart-grid">
+        <div class="card chart-card">
+            <h3>Monthly cash flow</h3>
+            @if (_chartBars is not null)
+            {
+                <Chart Config="_chartBars" Height="220"></Chart>
+            }
+        </div>
+        <div class="card chart-card">
+            <h3>Daily cash flow</h3>
+            @if (_chartLine is not null)
+            {
+                <Chart Config="_chartLine" Height="220"></Chart>
+            }
+        </div>
+        <div class="card chart-card">
+            <h3>Spending by category</h3>
+            @if (_chartDonut is not null)
+            {
+                <Chart Config="_chartDonut" Height="220"></Chart>
+            }
+        </div>
+    </div>
+
+    <h4 class="test-pack">Radzen</h4>
+    <p class="muted small test-chart-note">MIT. Native Blazor charts with a business-dashboard look. No extra chart script of its own.</p>
+    <div class="grid-3 test-chart-grid">
+        <div class="card chart-card">
+            <h3>Monthly cash flow</h3>
+            <div class="test-radzen">
+                <RadzenChart>
+                    <RadzenColumnSeries Data="@_monthRows" CategoryProperty="Label" ValueProperty="MoneyIn" Title="Money in" Fill="@Palette.Colors.MoneyIn" />
+                    <RadzenColumnSeries Data="@_monthRows" CategoryProperty="Label" ValueProperty="MoneyOut" Title="Money out" Fill="@Palette.Colors.MoneyOut" />
+                    <RadzenCategoryAxis LabelFit="CategoryAxisLabelFit.None" />
+                    <RadzenValueAxis Formatter="@FormatAxis" />
+                    <RadzenLegend Position="Radzen.Blazor.LegendPosition.Bottom" />
+                </RadzenChart>
+            </div>
+        </div>
+        <div class="card chart-card">
+            <h3>Daily cash flow</h3>
+            <div class="test-radzen">
+                <RadzenChart>
+                    <RadzenLineSeries Data="@_dayRows" CategoryProperty="Label" ValueProperty="MoneyIn" Title="Money in" Stroke="@Palette.Colors.MoneyIn" />
+                    <RadzenLineSeries Data="@_dayRows" CategoryProperty="Label" ValueProperty="MoneyOut" Title="Money out" Stroke="@Palette.Colors.MoneyOut" />
+                    <RadzenCategoryAxis LabelFit="CategoryAxisLabelFit.None" />
+                    <RadzenValueAxis Formatter="@FormatAxis" />
+                    <RadzenLegend Position="Radzen.Blazor.LegendPosition.Bottom" />
+                </RadzenChart>
+            </div>
+        </div>
+        <div class="card chart-card">
+            <h3>Spending by category</h3>
+            <div class="test-radzen">
+                <RadzenChart>
+                    <RadzenDonutSeries Data="@_categories" CategoryProperty="CategoryName" ValueProperty="Total" Title="Spent" Fills="@_fills" />
+                    <RadzenLegend Position="Radzen.Blazor.LegendPosition.Bottom" />
+                </RadzenChart>
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    private List<MonthlyTrendPoint> _monthly = [];
+    private List<DailyCashFlowPoint> _daily = [];
+    private List<ChartPoint> _monthRows = [];
+    private List<ChartPoint> _dayRows = [];
+    private List<CategoryTotal> _categories = [];
+
+    private sealed class ChartPoint
+    {
+        public string Label { get; set; } = "";
+        public decimal MoneyIn { get; set; }
+        public decimal MoneyOut { get; set; }
+    }
+    private string[] _fills = [];
+    private ApexChartOptions<MonthlyTrendPoint> _apexColumns = null!;
+    private ApexChartOptions<DailyCashFlowPoint> _apexArea = null!;
+    private ApexChartOptions<CategoryTotal> _apexDonut = null!;
+    private BarChartConfig? _chartBars;
+    private LineChartConfig? _chartLine;
+    private DoughnutChartConfig? _chartDonut;
+
+    protected override void OnInitialized()
+    {
+        Theme.Changed += Rebuild;
+        Palette.Changed += Rebuild;
+        Load();
+    }
+
+    private void Rebuild()
+    {
+        Load();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Load()
+    {
+        var (start, end) = DateRangePreset.ThisMonth.Resolve();
+        var trendStart = new DateTime(end.Year, end.Month, 1).AddMonths(-5);
+        _monthly = Reporting.MonthlyTrend(trendStart, end).ToList();
+        _daily = Reporting.PeriodCashFlow(start, end).ToList();
+        _monthRows = _monthly.Select(m => new ChartPoint
+        {
+            Label = m.MonthStart.ToString("MMM", System.Globalization.CultureInfo.CurrentCulture),
+            MoneyIn = m.MoneyIn,
+            MoneyOut = m.MoneyOut
+        }).ToList();
+        _dayRows = _daily.Select(d => new ChartPoint
+        {
+            Label = d.Day.Day.ToString(System.Globalization.CultureInfo.CurrentCulture),
+            MoneyIn = d.MoneyIn,
+            MoneyOut = d.MoneyOut
+        }).ToList();
+        _categories = Reporting.SpendingByCategory(start, end).Take(6).ToList();
+        _fills = _categories.Select((_, i) => Palette.Colors.ChartAt(i)).ToArray();
+        _apexColumns = ChartThemeOptions.Create<MonthlyTrendPoint>(Theme.IsDark, o => ChartThemeOptions.ApplyColumns(o, false));
+        _apexArea = ChartThemeOptions.Create<DailyCashFlowPoint>(Theme.IsDark, ChartThemeOptions.ApplyCashFlowArea);
+        _apexDonut = ChartThemeOptions.Create<CategoryTotal>(Theme.IsDark, o => ChartThemeOptions.ApplyDonut(o, "Total spent"));
+        _chartBars = Bars();
+        _chartLine = Lines();
+        _chartDonut = Donut();
+    }
+
+    private string Key(string name) => $"{name}-{Theme.IsDark}-{Palette.Revision}";
+
+    private static string FormatAxis(object value) => value switch
+    {
+        decimal amount => MoneyFormat.Axis(amount),
+        double amount => MoneyFormat.Axis((decimal)amount),
+        float amount => MoneyFormat.Axis((decimal)amount),
+        int amount => MoneyFormat.Axis(amount),
+        long amount => MoneyFormat.Axis(amount),
+        _ => ""
+    };
+
+    private BarChartConfig Bars()
+    {
+        var config = new BarChartConfig { Options = new Options { Responsive = true, MaintainAspectRatio = false } };
+        config.Data.Labels = _monthly.Select(m => m.Month).ToList();
+        config.Data.Datasets.Add(Bar("Money in", _monthly.Select(m => m.MoneyIn), Palette.Colors.MoneyIn));
+        config.Data.Datasets.Add(Bar("Money out", _monthly.Select(m => m.MoneyOut), Palette.Colors.MoneyOut));
+        return config;
+    }
+
+    private LineChartConfig Lines()
+    {
+        var config = new LineChartConfig { Options = new Options { Responsive = true, MaintainAspectRatio = false } };
+        config.Data.Labels = _daily.Select(d => d.Label).ToList();
+        config.Data.Datasets.Add(Line("Money in", _daily.Select(d => d.MoneyIn), Palette.Colors.MoneyIn));
+        config.Data.Datasets.Add(Line("Money out", _daily.Select(d => d.MoneyOut), Palette.Colors.MoneyOut));
+        return config;
+    }
+
+    private DoughnutChartConfig Donut()
+    {
+        var config = new DoughnutChartConfig { Options = new Options { Responsive = true, MaintainAspectRatio = false } };
+        config.Data.Labels = _categories.Select(c => c.CategoryName).ToList();
+        config.Data.Datasets.Add(new DoughnutDataset
+        {
+            Label = "Spent",
+            Data = _categories.Select(c => (decimal?)c.Total).ToList(),
+            BackgroundColor = _fills.ToList(),
+            BorderWidth = 1
+        });
+        return config;
+    }
+
+    private static BarDataset Bar(string label, IEnumerable<decimal> values, string color) => new()
+    {
+        Label = label,
+        Data = values.Select(v => (decimal?)v).ToList(),
+        BackgroundColor = [color],
+        BorderColor = [color],
+        BorderWidth = 1
+    };
+
+    private static LineDataset Line(string label, IEnumerable<decimal> values, string color) => new()
+    {
+        Label = label,
+        Data = values.Select(v => (decimal?)v).ToList(),
+        BackgroundColor = color,
+        BorderColor = color,
+        BorderWidth = 2,
+        Tension = 0.35m
+    };
+
+    public void Dispose()
+    {
+        Theme.Changed -= Rebuild;
+        Palette.Changed -= Rebuild;
+    }
+}

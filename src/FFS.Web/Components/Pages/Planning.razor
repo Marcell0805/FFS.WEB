@@ -30,10 +30,10 @@
     <div>
         <div class="eyebrow">Planning</div>
         <h1>Budget vs actual</h1>
-        <p>Needs, Wants and Savings — separated from category types. Planned amounts compared to this month’s Money Out.</p>
+        <p>Your Needs, Wants and Savings — kept apart from category types. Your planned amounts compared with this month’s Money Out.</p>
     </div>
     <div class="hero-meta">
-        <span class="pill"><i class="bi bi-calendar3"></i> @month.ToString("d MMM yyyy") – @DateTime.Today.ToString("d MMM yyyy")</span>
+        <DateRangePills From="month" To="DateTime.Today" />
         <a class="btn secondary" href="settings">Manage budget</a>
     </div>
 </div>
@@ -47,13 +47,13 @@ else
     <div class="grid-3">
         @foreach (var b in overview.Buckets)
         {
-            var used = b.Planned <= 0 ? 0 : Math.Clamp((double)(b.Actual / b.Planned) * 100, 0, 100);
-            var tone = b.Bucket switch
+            var used = ProgressScale.Percent(b.Actual, b.Planned);
+            var tone = ProgressScale.BarClass(used, b.Bucket switch
             {
-                BudgetBucketKind.Needs => "success",
-                BudgetBucketKind.Wants => "error",
-                _ => "accent"
-            };
+                BudgetBucketKind.Needs => "needs",
+                BudgetBucketKind.Wants => "wants",
+                _ => "savings"
+            });
             <div class="card ring-card">
                 <div class="ring-head">
                     <span class="stat-ico @tone"><i class="bi @(b.Bucket == BudgetBucketKind.Needs ? "bi-house" : b.Bucket == BudgetBucketKind.Wants ? "bi-bag" : "bi-piggy-bank")"></i></span>
@@ -63,13 +63,13 @@ else
                     </div>
                 </div>
                 <div class="ring-body">
-                    <div class="ring @tone" style="--p:@used.ToString("0.##")">
-                        <span>@used.ToString("0")%</span>
+                    <div class="ring @tone" style="--p:@ProgressScale.Width(used)">
+                        <span>@ProgressScale.Label(used)%</span>
                     </div>
                     <div class="ring-stats">
                         <div class="list-row"><span>Planned</span><span class="amount">@MoneyFormat.Zar(b.Planned)</span></div>
-                        <div class="list-row"><span>@(b.Bucket == BudgetBucketKind.Savings ? "Saved" : "Actual")</span><span class="amount out">@MoneyFormat.Zar(b.Actual)</span></div>
-                        <div class="list-row"><span>@(b.Bucket == BudgetBucketKind.Savings ? "Vs plan" : "Remaining")</span><span class="amount @(b.Remaining >= 0 ? "in" : "out")">@MoneyFormat.Zar(b.Remaining)</span></div>
+                        <div class="list-row"><span>@(b.Bucket == BudgetBucketKind.Savings ? "Saved" : "Actual")</span><span class="amount @tone">@MoneyFormat.Zar(b.Actual)</span></div>
+                        <div class="list-row"><span>@(b.Bucket == BudgetBucketKind.Savings ? "Vs target" : "Remaining")</span><span class="amount @(b.Remaining >= 0 ? "in" : "out")">@MoneyFormat.Zar(b.Remaining)</span></div>
                     </div>
                 </div>
             </div>
@@ -108,9 +108,13 @@ else
                     @foreach (var row in cats)
                     {
                         var type = Data.Categories.FirstOrDefault(c => c.Id == row.CategoryId)?.CategoryType.ToString() ?? "—";
-                        var used = row.Planned <= 0
-                            ? 0
-                            : Math.Clamp((double)(row.Actual / row.Planned) * 100, 0, 160);
+                        var used = ProgressScale.Percent(row.Actual, row.Planned);
+                        var bar = ProgressScale.BarClass(used, row.Bucket switch
+                        {
+                            BudgetBucketKind.Needs => "needs",
+                            BudgetBucketKind.Wants => "wants",
+                            _ => "savings"
+                        });
                         <tr>
                             <td><i class="bi @CategoryIcons.For(row.CategoryName)"></i> @row.CategoryName</td>
                             <td>@type</td>
@@ -119,8 +123,8 @@ else
                             <td class="amount out">@MoneyFormat.Zar(row.Actual)</td>
                             <td class="amount @(row.Remaining >= 0 ? "in" : "out")">@MoneyFormat.Zar(row.Remaining)</td>
                             <td class="progress-cell">
-                                <div class="progress slim"><span style="width:@Math.Min(used, 100).ToString("0.##")%"></span></div>
-                                <span class="muted small">@used.ToString("0")%</span>
+                                <div class="progress slim"><span class="@bar" style="width:@ProgressScale.Width(used)%"></span></div>
+                                <span class="progress-label muted small">@ProgressScale.Label(used)%</span>
                             </td>
                         </tr>
                     }
@@ -137,7 +141,7 @@ else
                 <p class="muted small">
                     @(over
                         ? "Your Needs spending is above plan. Consider reviewing Fuel and Groceries."
-                        : "Needs spending is within this month’s plan.")
+                        : "Your Needs spending is within this month’s plan.")
                 </p>
             </div>
         </div>

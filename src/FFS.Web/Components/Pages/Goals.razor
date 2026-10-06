@@ -13,7 +13,7 @@
     var done = goals.Count(g => g.Goal.Progress >= 1);
     var saved = goals.Sum(g => g.Goal.CurrentAmount);
     var target = goals.Sum(g => g.Goal.TargetAmount);
-    var avg = goals.Count == 0 ? 0 : goals.Average(g => (double)g.Goal.Progress) * 100;
+    var avg = goals.Count == 0 ? 0 : goals.Average(g => ProgressScale.Percent(g.Goal.CurrentAmount, g.Goal.TargetAmount));
     var visible = _goalFilter switch
     {
         "behind" => goals.Where(g => g.Goal.Progress < 0.5m).ToList(),
@@ -27,18 +27,34 @@
     <div>
         <div class="eyebrow">Goals</div>
         <h1>Progress toward what matters</h1>
-        <p>Click a goal to see contribution history and related money movement.</p>
+        <p>Click a goal to see your contribution history and the money movement tied to it.</p>
     </div>
 </div>
 
 <div class="kpi-grid kpi-4">
-    <KpiCard Label="Goals" Value="@goals.Count.ToString()" Icon="bi-bullseye" Tone="accent" Caption="@($"{onTrack} on track · {behind} behind")" />
-    <KpiCard Label="Total saved" Value="@MoneyFormat.Zar(saved)" Icon="bi-record-circle" Tone="error" />
-    <KpiCard Label="Combined target" Value="@MoneyFormat.Zar(target)" Icon="bi-flag" Tone="accent" />
     <div class="stat-tile tone-neutral">
-        <div class="stat-head"><span class="stat-ico accent"><i class="bi bi-bar-chart"></i></span><span class="stat-lbl">Average progress</span></div>
-        <div class="stat-val">@avg.ToString("0")%</div>
-        <div class="progress"><span style="width:@avg.ToString("0.##")%"></span></div>
+        <div class="stat-head"><span class="stat-ico neutral"><i class="bi bi-bullseye"></i></span><span class="stat-lbl">Goals</span></div>
+        <div class="stat-val">@goals.Count</div>
+        <div class="stat-cap status-line">
+            <span>@onTrack on track · @behind behind</span>
+            <button type="button" class="help-mark" @onclick="ToggleStatusHelp" aria-label="How on track and behind are decided">?</button>
+        </div>
+        @if (_statusHelp)
+        {
+            <div class="help-pop" role="note">
+                <p><strong>On track</strong> means you have saved at least half of your target, and you are not there yet.</p>
+                <p><strong>Behind</strong> means you have saved less than half of your target.</p>
+                <p><strong>Completed</strong> means you have saved your full target. If you are over 100%, the bar uses your Over 100% color.</p>
+                <p>Your target date is not part of this. It only tells you how many months you have left and the monthly amount.</p>
+            </div>
+        }
+    </div>
+    <KpiCard Label="Total saved" Value="@MoneyFormat.Zar(saved)" Icon="bi-record-circle" Tone="savings" />
+    <KpiCard Label="Combined target" Value="@MoneyFormat.Zar(target)" Icon="bi-flag" Tone="neutral" />
+    <div class="stat-tile tone-neutral">
+        <div class="stat-head"><span class="stat-ico neutral"><i class="bi bi-bar-chart"></i></span><span class="stat-lbl">Average progress</span></div>
+        <div class="stat-val">@ProgressScale.Label(avg)%</div>
+        <div class="progress"><span class="@ProgressScale.GoalTone(avg)" style="width:@ProgressScale.Width(avg)%"></span></div>
     </div>
 </div>
 
@@ -53,22 +69,22 @@
     <div class="goal-stack">
         @foreach (var g in visible)
         {
-            var pct = g.Goal.Progress * 100;
+            var pct = ProgressScale.Percent(g.Goal.CurrentAmount, g.Goal.TargetAmount);
             var monthsLeft = g.Goal.TargetDate is DateTime td
                 ? Math.Max(1, (td.Year - DateTime.Today.Year) * 12 + td.Month - DateTime.Today.Month)
                 : 0;
             var monthly = monthsLeft > 0 ? Math.Max(0, g.Goal.Remaining / monthsLeft) : 0;
-            var tone = pct >= 70 ? "success" : pct >= 50 ? "accent" : "error";
+            var tone = ProgressScale.GoalTone(pct);
             <div class="card goal-card-wide clickable-card" @onclick="() => OpenGoal(g.Goal.Id)">
                 <span class="goal-ico tone-@tone"><i class="bi @CategoryIcons.For(g.Goal.Name, g.Goal.IconName)"></i></span>
                 <div>
                     <strong>@g.Goal.Name</strong>
                     <p class="muted small">@(g.Goal.Description ?? "")</p>
-                    <div class="progress"><span class="@tone" style="width:@pct.ToString("0.##")%"></span></div>
+                    <div class="progress"><span class="@tone" style="width:@ProgressScale.Width(pct)%"></span></div>
                     <div class="muted small">@MoneyFormat.Zar(g.Goal.CurrentAmount) of @MoneyFormat.Zar(g.Goal.TargetAmount) · @MoneyFormat.Zar(g.Goal.Remaining) remaining</div>
                 </div>
                 <div class="goal-side">
-                    <div class="stat-val @tone">@pct.ToString("0")%</div>
+                    <div class="stat-val @tone">@ProgressScale.Label(pct)%</div>
                     <div class="muted small">Target date</div>
                     <div>@(g.Goal.TargetDate?.ToString("MMMM yyyy") ?? "—")</div>
                     @if (monthly > 0)
@@ -88,15 +104,15 @@
         <div class="card insight-card ok">
             <i class="bi bi-graph-up-arrow"></i>
             <div>
-                <strong>Great progress</strong>
-                <p class="muted small">Keep contributing — even small amounts compound.</p>
+                <strong>You're making good progress</strong>
+                <p class="muted small">Keep contributing to your goals — even small amounts add up.</p>
             </div>
         </div>
         <div class="card insight-card ok">
             <i class="bi bi-check-circle"></i>
             <div>
-                <strong>@onTrack goals on track</strong>
-                <p class="muted small">Keep up the contributions.</p>
+                <strong>@onTrack of your goals are on track</strong>
+                <p class="muted small">Keep your contributions going.</p>
             </div>
         </div>
         @if (behind > 0)
@@ -105,7 +121,7 @@
                 <i class="bi bi-exclamation-circle"></i>
                 <div>
                     <strong>@behind @(behind == 1 ? "goal" : "goals") behind</strong>
-                    <p class="muted small">Consider increasing the monthly contribution.</p>
+                    <p class="muted small">Consider increasing your monthly contribution.</p>
                 </div>
             </div>
         }
@@ -123,6 +139,9 @@
 
 @code {
     private string _goalFilter = "all";
+    private bool _statusHelp;
+
+    private void ToggleStatusHelp() => _statusHelp = !_statusHelp;
 
     private void FilterAll() => _goalFilter = "all";
     private void FilterTrack() => _goalFilter = "track";

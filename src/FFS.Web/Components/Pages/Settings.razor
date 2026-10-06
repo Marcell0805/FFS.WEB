@@ -1,8 +1,10 @@
 @page "/settings"
 @inject ThemeService Theme
+@inject PaletteService Palette
 @inject IFinancialDataProvider Data
 @inject CsvExportService Export
 @inject IJSRuntime Js
+@implements IDisposable
 
 <PageTitle>@AppBrand.Name · Settings</PageTitle>
 
@@ -55,6 +57,13 @@
                 <span class="muted small">@(Theme.IsDark ? "On" : "Off")</span>
             </span>
         </button>
+        <div class="settings-row">
+            <span class="settings-icon muted-icon"><i class="bi bi-palette"></i></span>
+            <span class="settings-copy">
+                <strong>Colors</strong>
+                <span class="muted small">Try colors, shadows, and chart packages on the <a href="test">Test</a> page.</span>
+            </span>
+        </div>
     </div>
 </section>
 
@@ -114,6 +123,12 @@
     private const string PrivacyUrl = "https://marcell0805.github.io/the-foxs-den-doc/privacy/ffs.html#privacy";
     private const string TermsUrl = "https://marcell0805.github.io/the-foxs-den-doc/privacy/ffs.html#terms";
 
+    protected override void OnInitialized() => Theme.Changed += OnTheme;
+
+    private void OnTheme() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Theme.Changed -= OnTheme;
+
     private async Task ToggleTheme()
     {
         Theme.Toggle();
@@ -122,6 +137,7 @@
         {
             await Js.InvokeVoidAsync("ffsTheme.set", value);
             await Js.InvokeVoidAsync("ffsTheme.save", value);
+            await Js.InvokeVoidAsync("ffsPalette.apply", Palette.Colors, Theme.IsDark);
         }
         catch { /* ignore */ }
     }
@@ -131,4 +147,5 @@
         var csv = Export.ExportWorkbook();
         await Js.InvokeVoidAsync("ffsDownload", "ffs-export.csv", csv);
     }
+
 }

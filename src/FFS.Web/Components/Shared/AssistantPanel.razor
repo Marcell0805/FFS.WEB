@@ -1,0 +1,85 @@
+@inject HttpClient Http
+@inject DashboardService DashboardSvc
+@implements IDisposable
+
+@if (_open)
+{
+    <section class="assistant-panel" aria-label="Ask about your money">
+        <header class="assistant-head">
+            <strong>Ask F.F.S</strong>
+            <button type="button" class="assistant-close" @onclick="Close" aria-label="Close">×</button>
+        </header>
+        <div class="assistant-log">
+            @if (_messages.Count == 0)
+            {
+                <p class="muted small">Ask in your own words. I can answer help questions and a few facts about your money. Nothing leaves this browser.</p>
+            }
+            @foreach (var message in _messages)
+            {
+                <div class="assistant-msg @message.Role">@message.Text</div>
+            }
+        </div>
+        <div class="assistant-suggestions">
+            <button type="button" class="chip" @onclick='() => Ask("How do I import?")'>How do I import?</button>
+            <button type="button" class="chip" @onclick='() => Ask("Upload a csv")'>Upload a csv</button>
+            <button type="button" class="chip" @onclick='() => Ask("How much have I saved toward my goals?")'>My goals</button>
+        </div>
+        <form class="assistant-form" @onsubmit="Submit" @onsubmit:preventDefault="true">
+            <input type="text" placeholder="Ask a question…" @bind="_draft" @bind:event="oninput" />
+            <button type="submit" class="secondary">Ask</button>
+        </form>
+    </section>
+}
+<button type="button" class="assistant-fab" @onclick="Toggle" aria-label="Ask a question">
+    <i class="bi bi-chat-dots"></i>
+</button>
+
+@code {
+    private bool _open;
+    private string _draft = "";
+    private bool _faqLoaded;
+    private List<FaqEntry> _faq = [];
+    private readonly List<ChatMessage> _messages = [];
+
+    private void Toggle() => _open = !_open;
+    private void Close() => _open = false;
+
+    private async Task Submit()
+    {
+        var text = _draft.Trim();
+        _draft = "";
+        if (text.Length == 0) return;
+        await Ask(text);
+    }
+
+    private async Task Ask(string text)
+    {
+        _open = true;
+        _messages.Add(new ChatMessage("user", text));
+        await EnsureFaq();
+        var dash = DashboardSvc.GetDashboard();
+        _messages.Add(new ChatMessage("bot", AssistantAnswers.Answer(text, _faq, dash)));
+    }
+
+    private async Task EnsureFaq()
+    {
+        if (_faqLoaded) return;
+        try
+        {
+            var text = await Http.GetStringAsync("data/faq.md");
+            _faq = FaqSearch.Parse(text);
+        }
+        catch
+        {
+            _faq = [];
+        }
+        finally
+        {
+            _faqLoaded = true;
+        }
+    }
+
+    public void Dispose() { }
+
+    private sealed record ChatMessage(string Role, string Text);
+}

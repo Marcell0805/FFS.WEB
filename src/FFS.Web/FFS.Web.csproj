@@ -15,6 +15,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.14" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.14" PrivateAssets="all" />
     <PackageReference Include="Blazor-ApexCharts" Version="7.0.0" />
+    <PackageReference Include="PSC.Blazor.Components.Chartjs" Version="8.0.8" />
+    <PackageReference Include="Radzen.Blazor" Version="12.0.6" />
   </ItemGroup>
 
 </Project>

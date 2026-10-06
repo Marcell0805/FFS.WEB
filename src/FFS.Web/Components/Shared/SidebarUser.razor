@@ -1,0 +1,55 @@
+@inject UserSessionService Session
+@inject IJSRuntime Js
+@implements IDisposable
+
+<div class="sidebar-user">
+    @if (Session.IsSignedIn)
+    {
+        <div class="sidebar-user-card">
+            <span class="sidebar-user-avatar" aria-hidden="true">@Session.Initial</span>
+            <span class="sidebar-user-copy">
+                <span class="sidebar-user-name">@Session.Username</span>
+                <button type="button" class="sidebar-user-out" @onclick="SignOut">Sign out</button>
+            </span>
+        </div>
+    }
+    else
+    {
+        <button type="button" class="theme-toggle sidebar-signin-toggle" @onclick="Session.OpenPrompt">
+            <i class="bi bi-person"></i>
+            Sign in
+        </button>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => Session.Changed += OnChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Session.IsSignedIn) return;
+        try
+        {
+            var name = await Js.InvokeAsync<string?>("ffsUser.get");
+            if (!string.IsNullOrWhiteSpace(name))
+                Session.SignIn(name);
+        }
+        catch (JSException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    private async Task SignOut()
+    {
+        Session.SignOut();
+        try
+        {
+            await Js.InvokeVoidAsync("ffsUser.set", null);
+        }
+        catch (JSException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Session.Changed -= OnChanged;
+}

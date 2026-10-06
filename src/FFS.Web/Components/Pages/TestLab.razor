@@ -2,16 +2,57 @@
 @inject IFinancialDataProvider Data
 @inject NavigationManager Nav
 @inject HttpClient Http
+@inject ThemeService Theme
+@inject PaletteService Palette
+@inject IJSRuntime Js
+@implements IDisposable
 
 <PageTitle>@AppBrand.Name · Test</PageTitle>
 
-<PageHeader Eyebrow="Test" Title="Demo tools" Subtitle="Load sample money, add one transaction, or clear the ledger. This stays in the browser." />
+<PageHeader Eyebrow="Test" Title="Try colors and charts" Subtitle="Colors update the app straight away. The chart packages below use the same sample." />
+
+<section class="settings-group">
+    <h3>Colors</h3>
+    <div class="settings-card">
+        <div class="settings-palette">
+            <div class="settings-copy">
+                <strong>Each color says where it shows up</strong>
+                <span class="muted small">Change one, then open Home or Reports to see it. Reset puts the defaults back.</span>
+            </div>
+            <div class="palette-grid">
+                @foreach (var field in _fields)
+                {
+                    <label class="palette-field">
+                        <span class="palette-name">@field.Label</span>
+                        <input type="color" value="@field.Get(Palette.Colors)" @onchange="e => SetColor(field, e)" aria-label="@field.Label" />
+                        <span class="palette-impact">@field.Impact</span>
+                    </label>
+                }
+            </div>
+            <div class="palette-preview">
+                <span class="swatch lg" style="background:var(--ffs-in)" title="Money in"></span>
+                <span class="swatch lg" style="background:var(--ffs-out)" title="Money out"></span>
+                <span class="swatch lg" style="background:var(--ffs-needs)" title="Needs"></span>
+                <span class="swatch lg" style="background:var(--ffs-wants)" title="Wants"></span>
+                <span class="swatch lg" style="background:var(--ffs-savings)" title="Savings"></span>
+                <span class="swatch lg" style="background:var(--ffs-over)" title="Over 100%"></span>
+                <div class="progress slim preview-bar" title="Wants bar"><span class="wants" style="width:70%"></span></div>
+                <span class="palette-impact preview-note">Live sample of money in, money out, Needs, Wants, Savings, over 100%, and a Wants bar. The shadow on this strip follows the shadow color for the mode you are in.</span>
+            </div>
+            <button type="button" class="secondary" @onclick="ResetColors">Reset colors</button>
+        </div>
+    </div>
+</section>
+
+<TestChartGallery />
 
 @if (!string.IsNullOrWhiteSpace(_notice))
 {
     <p class="pill">@_notice</p>
 }
 
+<section class="settings-group">
+    <h3>Demo data</h3>
 <div class="settings-card">
     <button type="button" class="settings-row buttonish" @onclick="LoadDemo">
         <span class="settings-icon accent"><i class="bi bi-calendar3"></i></span>
@@ -45,9 +86,33 @@
 
 <p class="muted" style="margin-top:1rem;">@Data.Transactions.Count transactions · @Data.Accounts.Count accounts</p>
 <p><a href="http://localhost:5088/swagger" target="_blank" rel="noopener noreferrer">Open the API in Swagger</a></p>
+</section>
 
 @code {
     private string? _notice;
+
+    private readonly PaletteField[] _fields =
+    [
+        new("Money in", "Income totals, money-in amounts, the income series on cash-flow charts, and the forecast line.", c => c.MoneyIn, (c, v) => c.MoneyIn = v),
+        new("Money out", "Spending totals, money-out amounts, and the spending series on cash-flow charts. Goal bars under 50% use it too.", c => c.MoneyOut, (c, v) => c.MoneyOut = v),
+        new("Needs", "Needs rings, bars, and amounts on Planning and your dashboard.", c => c.Needs, (c, v) => c.Needs = v),
+        new("Wants", "Wants rings, bars, and amounts on Planning and your dashboard.", c => c.Wants, (c, v) => c.Wants = v),
+        new("Savings", "Savings rings, bars, and amounts on Planning and your dashboard. Goal bars from 50% to 100% use it too.", c => c.Savings, (c, v) => c.Savings = v),
+        new("Over 100%", "Bucket and goal bars once progress goes past 100%. At exactly 100% the usual color stays.", c => c.Over, (c, v) => c.Over = v),
+        new("Warning", "Warning banners, such as when your forecast is cash negative.", c => c.Warning, (c, v) => c.Warning = v),
+        new("Chart 1", "The first category on Spending by category (Home and Reports), the first Spending trends line, and the first category dot. In the sample that is Housing.", c => c.Chart1, (c, v) => c.Chart1 = v),
+        new("Chart 2", "The next category on those charts. In the sample that is Insurance.", c => c.Chart2, (c, v) => c.Chart2 = v),
+        new("Chart 3", "The next category on those charts. In the sample that is Subscriptions.", c => c.Chart3, (c, v) => c.Chart3 = v),
+        new("Chart 4", "The fourth category on those same charts and lists.", c => c.Chart4, (c, v) => c.Chart4 = v),
+        new("Chart 5", "The fifth category on those same charts and lists.", c => c.Chart5, (c, v) => c.Chart5 = v),
+        new("Chart 6", "The sixth category. Further categories repeat from Chart 1. Income vs spending, Daily cash flow, and the forecast line use Money in and Money out instead.", c => c.Chart6, (c, v) => c.Chart6 = v),
+        new("Shadow (light)", "The shadow on cards and tiles while dark mode is off.", c => c.ShadowLight, (c, v) => c.ShadowLight = v),
+        new("Shadow (dark)", "The shadow on cards and tiles while dark mode is on.", c => c.ShadowDark, (c, v) => c.ShadowDark = v)
+    ];
+
+    protected override void OnInitialized() => Theme.Changed += OnTheme;
+    private void OnTheme() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Theme.Changed -= OnTheme;
 
     private void LoadDemo()
     {
@@ -82,4 +147,29 @@
         _notice = "Ledger cleared. Balances and budget figures are zero.";
         Nav.NavigateTo("test", forceLoad: false);
     }
+
+    private async Task SetColor(PaletteField field, ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(value) || !value.StartsWith('#')) return;
+        var next = Palette.Colors.Copy();
+        field.Set(next, value);
+        await Apply(next);
+    }
+
+    private async Task ResetColors() => await Apply(new PaletteColors());
+
+    private async Task Apply(PaletteColors colors)
+    {
+        Palette.Replace(colors);
+        ChartThemeOptions.Colors = colors;
+        try
+        {
+            await Js.InvokeVoidAsync("ffsPalette.save", Palette.ToJson());
+            await Js.InvokeVoidAsync("ffsPalette.apply", colors, Theme.IsDark);
+        }
+        catch { /* ignore */ }
+    }
+
+    private sealed record PaletteField(string Label, string Impact, Func<PaletteColors, string> Get, Action<PaletteColors, string> Set);
 }

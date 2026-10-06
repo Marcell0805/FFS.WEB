@@ -4,6 +4,9 @@
 @inject IFinancialDataProvider Data
 @inject NavigationManager Nav
 @inject ThemeService Theme
+@inject PaletteService Palette
+@inject DisplayPrefsService Prefs
+@inject IJSRuntime Js
 @implements IDisposable
 @using FFS.Domain
 @using FFS.Domain.Enums
@@ -14,7 +17,7 @@
     var vm = DashboardSvc.GetDashboard();
     var cash = vm.ThisMonthCashFlow;
     var prev = vm.PreviousPeriodCashFlow;
-    var showCompare = prev.TransactionCount > 0;
+    var showCompare = Prefs.ShowVsLast && prev.TransactionCount > 0;
     var (monthStart, monthEnd) = DateRangePreset.ThisMonth.Resolve();
     var needs = vm.Budget.Buckets.FirstOrDefault(b => b.Bucket == BudgetBucketKind.Needs);
     var wants = vm.Budget.Buckets.FirstOrDefault(b => b.Bucket == BudgetBucketKind.Wants);
@@ -31,7 +34,8 @@
         <p>Here’s your financial overview for @monthStart.ToString("MMMM yyyy").</p>
     </div>
     <div class="hero-meta">
-        <span class="pill"><i class="bi bi-calendar3"></i> @monthStart.ToString("d MMM yyyy") – @monthEnd.ToString("d MMM yyyy")</span>
+        <button type="button" class="chip @(_vsLast ? "active" : null)" @onclick="ToggleVsLast">Vs last month</button>
+        <DateRangePills From="monthStart" To="monthEnd" />
     </div>
 </div>
 
@@ -42,29 +46,29 @@
     <KpiCard Label="Money out" Value="@MoneyFormat.Zar(cash.MoneyOut)" Icon="bi-arrow-down" Tone="error"
              Delta="@(outDelta?.Text)" DeltaUp="@(outDelta?.Change >= 0)"
              Caption="@(showCompare ? "vs last month" : "This month")" Clickable="true" OnClick="DrillMoneyOut" />
-    <KpiCard Label="Net cash flow" Value="@MoneyFormat.Zar(cash.Net)" Icon="bi-bar-chart" Tone="accent"
+    <KpiCard Label="Net cash flow" Value="@MoneyFormat.Zar(cash.Net)" Icon="bi-bar-chart" Tone="neutral"
              Delta="@(netDelta?.Text)" DeltaUp="@(netDelta?.Change >= 0)"
-             Caption="@(cash.Net >= 0 ? "You're cash positive this month." : "Cash negative this month.")"
+             Caption="@(cash.Net >= 0 ? "You're cash positive this month." : "You're cash negative this month.")"
              Clickable="true" OnClick="DrillThisMonth" />
 </div>
 
 <div class="grid-2">
-    <div class="card chart-card">
+    <div class="card chart-card chart-drill">
         <div class="card-header">
             <div>
                 <h3><i class="bi bi-activity"></i> Cash flow trend</h3>
-                <p class="muted small">Income vs expenses over the last 6 months.</p>
+                <p class="muted small">Your income and expenses over the last 6 months. Click a point to open those transactions.</p>
             </div>
             <span class="pill quiet">Last 6 months</span>
         </div>
-        <ApexChart @key="@($"home-trend-{Theme.IsDark}")" TItem="MonthlyTrendPoint" Height="280" Options="_trendOptions">
+        <ApexChart @key="@($"home-trend-{Theme.IsDark}-{Palette.Revision}")" TItem="MonthlyTrendPoint" Height="280" Options="_trendOptions" OnClick="OnTrendClick">
             <ApexPointSeries TItem="MonthlyTrendPoint" Items="vm.CashFlowTrend" Name="Money In" SeriesType="SeriesType.Area"
                              XValue="@(e => e.Month)" YValue="@(e => e.MoneyIn)" />
             <ApexPointSeries TItem="MonthlyTrendPoint" Items="vm.CashFlowTrend" Name="Money Out" SeriesType="SeriesType.Area"
                              XValue="@(e => e.Month)" YValue="@(e => e.MoneyOut)" />
         </ApexChart>
     </div>
-    <div class="card chart-card">
+    <div class="card chart-card chart-drill">
         <div class="card-header">
             <div>
                 <h3><i class="bi bi-pie-chart"></i> Spending by category</h3>
@@ -78,7 +82,7 @@
         else
         {
             <div class="donut-split">
-                <ApexChart @key="@($"home-donut-{Theme.IsDark}")" TItem="CategoryTotal" Height="220" Options="_donutOptions">
+                <ApexChart @key="@($"home-donut-{Theme.IsDark}-{Palette.Revision}")" TItem="CategoryTotal" Height="220" Options="_donutOptions" OnDataPointSelection="OnDonutClick">
                     <ApexPointSeries TItem="CategoryTotal" Items="vm.TopSpending" Name="Spend" SeriesType="SeriesType.Donut"
                                      XValue="@(e => e.CategoryName)" YValue="@(e => e.Total)" />
                 </ApexChart>
@@ -88,7 +92,7 @@
                     {
                         var pct = cash.MoneyOut <= 0 ? 0 : (row.Total / cash.MoneyOut) * 100;
                         <div class="legend-row clickable" @onclick="() => DrillCategory(row, monthStart, monthEnd)">
-                            <span class="swatch s-@i"></span>
+                            <span class="swatch" style="background:@Palette.Colors.ChartAt(i)"></span>
                             <span>@row.CategoryName</span>
                             <span class="muted">@pct.ToString("0")%</span>
                             <span class="amount out">@MoneyFormat.Zar(row.Total)</span>
@@ -116,11 +120,17 @@
             @foreach (var b in new[] { needs, wants, savings })
             {
                 if (b is null) continue;
-                var used = b.Planned <= 0 ? 0 : Math.Clamp((double)(b.Actual / b.Planned) * 100, 0, 100);
+                var used = ProgressScale.Percent(b.Actual, b.Planned);
+                var tone = ProgressScale.BarClass(used, b.Bucket switch
+                {
+                    BudgetBucketKind.Needs => "needs",
+                    BudgetBucketKind.Wants => "wants",
+                    _ => "savings"
+                });
                 <div class="snap-row">
                     <span>@b.Bucket</span>
-                    <div class="progress slim"><span style="width:@used.ToString("0.##")%"></span></div>
-                    <span class="muted small">@used.ToString("0")% · @MoneyFormat.ZarCompact(b.Actual) / @MoneyFormat.ZarCompact(b.Planned)</span>
+                    <div class="progress slim"><span class="@tone" style="width:@ProgressScale.Width(used)%"></span></div>
+                    <span class="muted small">@ProgressScale.Label(used)% · @MoneyFormat.ZarCompact(b.Actual) / @MoneyFormat.ZarCompact(b.Planned)</span>
                 </div>
             }
         }
@@ -132,11 +142,12 @@
         </div>
         @foreach (var g in vm.Goals.Take(3))
         {
-            var pct = g.Goal.Progress * 100;
+            var pct = ProgressScale.Percent(g.Goal.CurrentAmount, g.Goal.TargetAmount);
+            var tone = ProgressScale.GoalTone(pct);
             <div class="snap-row clickable" @onclick="() => OpenGoal(g.Goal.Id)">
                 <span>@g.Goal.Name</span>
-                <div class="progress slim"><span style="width:@pct.ToString("0.##")%"></span></div>
-                <span class="muted small">@pct.ToString("0")% · @MoneyFormat.ZarCompact(g.Goal.CurrentAmount) / @MoneyFormat.ZarCompact(g.Goal.TargetAmount)</span>
+                <div class="progress slim"><span class="@tone" style="width:@ProgressScale.Width(pct)%"></span></div>
+                <span class="muted small">@ProgressScale.Label(pct)% · @MoneyFormat.ZarCompact(g.Goal.CurrentAmount) / @MoneyFormat.ZarCompact(g.Goal.TargetAmount)</span>
             </div>
         }
         @if (vm.Goals.Count == 0)
@@ -203,9 +214,14 @@
     private ApexChartOptions<MonthlyTrendPoint> _trendOptions = null!;
     private ApexChartOptions<CategoryTotal> _donutOptions = null!;
 
+    private bool _vsLast = true;
+
     protected override void OnInitialized()
     {
+        _vsLast = Prefs.ShowVsLast;
         Theme.Changed += OnThemeChanged;
+        Palette.Changed += OnThemeChanged;
+        Prefs.Changed += OnPrefsChanged;
         RebuildCharts();
     }
 
@@ -215,11 +231,43 @@
         InvokeAsync(StateHasChanged);
     }
 
+    private void OnPrefsChanged()
+    {
+        _vsLast = Prefs.ShowVsLast;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleVsLast()
+    {
+        _vsLast = !_vsLast;
+        Prefs.SetShowVsLast(_vsLast);
+        try
+        {
+            await Js.InvokeVoidAsync("ffsPrefs.saveVsLast", _vsLast);
+        }
+        catch { /* ignore */ }
+    }
+
     private void RebuildCharts()
     {
         _trendOptions = ChartThemeOptions.Create<MonthlyTrendPoint>(Theme.IsDark, ChartThemeOptions.ApplyCashFlowArea);
         _donutOptions = ChartThemeOptions.Create<CategoryTotal>(Theme.IsDark, o =>
             ChartThemeOptions.ApplyDonut(o, "Total spent"));
+    }
+
+    private async Task OnTrendClick(SelectedData<MonthlyTrendPoint> _)
+    {
+        var hit = await Js.InvokeAsync<ChartHit>("ffsReadChartHit");
+        ChartNavigation.OpenMonth(Nav, DashboardSvc.GetDashboard().CashFlowTrend, hit.Index, hit.Series);
+    }
+
+    private void OnDonutClick(SelectedData<CategoryTotal> selected)
+    {
+        var points = DashboardSvc.GetDashboard().TopSpending;
+        var index = selected.DataPointIndex >= 0 ? selected.DataPointIndex : selected.SeriesIndex;
+        if (index < 0 || index >= points.Count) return;
+        var (start, end) = DateRangePreset.ThisMonth.Resolve();
+        DrillCategory(points[index], start, end);
     }
 
     private void DrillMoneyIn()
@@ -278,5 +326,10 @@
         _ => MoneyFormat.Zar(t.Amount)
     };
 
-    public void Dispose() => Theme.Changed -= OnThemeChanged;
+    public void Dispose()
+    {
+        Theme.Changed -= OnThemeChanged;
+        Palette.Changed -= OnThemeChanged;
+        Prefs.Changed -= OnPrefsChanged;
+    }
 }

@@ -1,5 +1,7 @@
 ﻿@inherits LayoutComponentBase
 @inject ThemeService Theme
+@inject PaletteService Palette
+@inject DisplayPrefsService Prefs
 @inject AppBootService Boot
 @inject IJSRuntime Js
 @inject NavigationManager Nav
@@ -58,6 +60,7 @@ else
                     <i class="bi @(Theme.IsDark ? "bi-brightness-high" : "bi-moon-stars")"></i>
                     @(Theme.IsDark ? "Light theme" : "Dark theme")
                 </button>
+                <SidebarUser />
                 <p class="drawer-quote">@AppBrand.Tagline</p>
                 <p class="proto-badge">@AppBrand.VersionLabel · in-memory demo</p>
             </div>
@@ -67,6 +70,8 @@ else
                 @Body
             </main>
         </div>
+        <AssistantPanel />
+        <SignInDialog />
     </div>
 }
 
@@ -98,6 +103,7 @@ else
     protected override void OnInitialized()
     {
         Theme.Changed += OnThemeChanged;
+        Palette.Changed += OnPaletteChanged;
         Boot.Changed += OnBootChanged;
         Nav.LocationChanged += OnLocationChanged;
     }
@@ -112,6 +118,14 @@ else
             var dark = stored != "light";
             Theme.SetDark(dark);
             await Js.InvokeVoidAsync("ffsTheme.set", dark ? "dark" : "light");
+            var paletteJson = await Js.InvokeAsync<string?>("ffsPalette.get");
+            Palette.LoadJson(paletteJson);
+            ChartThemeOptions.Colors = Palette.Colors;
+            Palette.Publish();
+            await Js.InvokeVoidAsync("ffsPalette.apply", Palette.Colors, Theme.IsDark);
+            var vsLast = await Js.InvokeAsync<string?>("ffsPrefs.getVsLast");
+            if (vsLast is not null)
+                Prefs.SetShowVsLast(vsLast != "0");
         }
         catch (JSException) { /* ignore */ }
         catch (InvalidOperationException) { /* ignore */ }
@@ -150,6 +164,7 @@ else
         {
             await Js.InvokeVoidAsync("ffsTheme.set", value);
             await Js.InvokeVoidAsync("ffsTheme.save", value);
+            await Js.InvokeVoidAsync("ffsPalette.apply", Palette.Colors, Theme.IsDark);
         }
         catch { /* ignore */ }
     }
@@ -158,11 +173,17 @@ else
         InvokeAsync(StateHasChanged);
 
     private void OnThemeChanged() => InvokeAsync(StateHasChanged);
+    private void OnPaletteChanged()
+    {
+        ChartThemeOptions.Colors = Palette.Colors;
+        InvokeAsync(StateHasChanged);
+    }
     private void OnBootChanged() => InvokeAsync(StateHasChanged);
 
     public void Dispose()
     {
         Theme.Changed -= OnThemeChanged;
+        Palette.Changed -= OnPaletteChanged;
         Boot.Changed -= OnBootChanged;
         Nav.LocationChanged -= OnLocationChanged;
     }

@@ -15,19 +15,20 @@
 else
 {
     var g = _goal;
-    var pct = g.Goal.Progress * 100;
+    var pct = ProgressScale.Percent(g.Goal.CurrentAmount, g.Goal.TargetAmount);
+    var bar = ProgressScale.GoalTone(pct);
 
     <div class="page-hero">
         <div class="eyebrow"><a href="planning/goals">Planning</a> / goals</div>
         <h1>@g.Goal.Name</h1>
-        <p>@(g.Goal.Description ?? "Contribution history and related ledger activity for this goal.")</p>
+        <p>@(g.Goal.Description ?? "Your contribution history and the money movement tied to this goal.")</p>
     </div>
 
     <div class="kpi-grid">
         <div class="kpi-card">
             <div class="kpi-label">Progress</div>
-            <div class="kpi-value">@pct.ToString("0")%</div>
-            <div class="progress"><span style="width:@pct.ToString("0.##")%"></span></div>
+            <div class="kpi-value">@ProgressScale.Label(pct)%</div>
+            <div class="progress"><span class="@bar" style="width:@ProgressScale.Width(pct)%"></span></div>
             <div class="muted small">@MoneyFormat.Zar(g.Goal.CurrentAmount) / @MoneyFormat.Zar(g.Goal.TargetAmount)</div>
         </div>
         <div class="kpi-card">
@@ -49,7 +50,7 @@ else
             <h3>Money in · contributions</h3>
             @if (g.Contributions.Count == 0)
             {
-                <p class="muted">No contributions logged.</p>
+                <p class="muted">You have not logged a contribution yet.</p>
             }
             else
             {
@@ -74,7 +75,7 @@ else
             </div>
             @if (g.RelatedTransactions.Count == 0)
             {
-                <p class="muted">No transactions have been marked towards this goal.</p>
+                <p class="muted">You have not marked any transactions towards this goal.</p>
             }
             else
             {

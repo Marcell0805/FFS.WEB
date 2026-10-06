@@ -1,0 +1,103 @@
+@inject UserSessionService Session
+@inject IJSRuntime Js
+@implements IDisposable
+
+@if (Session.PromptOpen)
+{
+    <div class="signin-backdrop" @onclick="Close"></div>
+    <div class="card signin-dialog" role="dialog" aria-modal="true" aria-labelledby="signin-title" @onkeydown="OnKey">
+        <div class="signin-head">
+            <div>
+                <div class="eyebrow">Account</div>
+                <h2 id="signin-title">Sign in</h2>
+            </div>
+            <button type="button" class="signin-close" @onclick="Close" aria-label="Close">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <p class="muted">Use your username and password.</p>
+        <form @onsubmit="SignIn" @onsubmit:preventDefault="true">
+            <div class="field">
+                <label for="signin-user">Username</label>
+                <input id="signin-user" @ref="_usernameInput" type="text" @bind="_username" @bind:event="oninput" autocomplete="username" maxlength="40" />
+            </div>
+            <div class="field">
+                <label for="signin-pass">Password</label>
+                <input id="signin-pass" type="password" @bind="_password" @bind:event="oninput" autocomplete="current-password" />
+            </div>
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <p class="signin-error">@_error</p>
+            }
+            <div class="signin-actions">
+                <button type="button" class="secondary" @onclick="Close">Cancel</button>
+                <button type="submit">Sign in</button>
+            </div>
+        </form>
+    </div>
+}
+
+@code {
+    private string _username = "";
+    private string _password = "";
+    private string? _error;
+    private bool _focusPending;
+    private ElementReference _usernameInput;
+
+    protected override void OnInitialized() => Session.Changed += OnChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusPending || !Session.PromptOpen) return;
+        _focusPending = false;
+        try
+        {
+            await _usernameInput.FocusAsync();
+        }
+        catch (JSException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    private void OnChanged()
+    {
+        if (Session.PromptOpen)
+            _focusPending = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            Close();
+    }
+
+    private void Close()
+    {
+        _password = "";
+        _error = null;
+        Session.ClosePrompt();
+    }
+
+    private async Task SignIn()
+    {
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
+        {
+            _error = "Enter your username and password.";
+            return;
+        }
+
+        var name = _username.Trim();
+        Session.SignIn(name);
+        _password = "";
+        _error = null;
+        Session.ClosePrompt();
+        try
+        {
+            await Js.InvokeVoidAsync("ffsUser.set", name);
+        }
+        catch (JSException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    public void Dispose() => Session.Changed -= OnChanged;
+}

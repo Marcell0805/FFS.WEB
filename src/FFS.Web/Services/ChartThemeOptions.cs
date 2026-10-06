@@ -13,6 +13,14 @@ public static class ChartThemeOptions
     public const string DonutLabelFontSize = "15px";
     public const string DonutValueFontSize = "16px";
 
+    private const string AxisFormatter =
+        "function(val) { return window.ffsFormatAxis ? window.ffsFormatAxis(val) : val; }";
+
+    private const string HoverTooltip =
+        "function(ctx) { return window.ffsChartTooltip ? window.ffsChartTooltip(ctx) : ''; }";
+
+    public static PaletteColors Colors { get; set; } = new();
+
     public static ApexChartOptions<T> Create<T>(bool dark, Action<ApexChartOptions<T>>? configure = null)
         where T : class
     {
@@ -49,8 +57,10 @@ public static class ChartThemeOptions
             [
                 new YAxis
                 {
+                    DecimalsInFloat = 0,
                     Labels = new YAxisLabels
                     {
+                        Formatter = AxisFormatter,
                         Style = new AxisLabelStyle { FontSize = AxisFontSize, Colors = fore }
                     }
                 }
@@ -81,28 +91,38 @@ public static class ChartThemeOptions
         return options;
     }
 
-    public static readonly string[] CashFlowColors = ["#14b8a6", "#fb7185"];
-
-    public static readonly string[] CategoryColors =
-    [
-        "#14b8a6", "#38bdf8", "#a78bfa", "#fb7185", "#fbbf24", "#34d399", "#f472b6", "#94a3b8"
-    ];
-
     public static void ApplyCashFlowArea<T>(ApexChartOptions<T> options) where T : class
     {
-        options.Colors = CashFlowColors.ToList();
+        options.Colors = [Colors.MoneyIn, Colors.MoneyOut];
         options.Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 };
         options.DataLabels = new DataLabels { Enabled = false };
         options.Fill = AreaFill(0.45, 0.04);
-        options.Markers = new Markers { Size = 0 };
+        options.Markers = HoverMarkers(0);
         if (options.Legend is not null)
             options.Legend.Position = LegendPosition.Bottom;
+        ApplyHoverTooltip(options);
     }
 
-    public static void ApplyColumns<T>(ApexChartOptions<T> options) where T : class
+    public static void ApplyCashFlowLine<T>(ApexChartOptions<T> options) where T : class
     {
-        options.Colors = CashFlowColors.ToList();
+        options.Colors = [Colors.MoneyIn, Colors.MoneyOut];
+        options.Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 };
         options.DataLabels = new DataLabels { Enabled = false };
+        options.Markers = HoverMarkers(0);
+        if (options.Legend is not null)
+            options.Legend.Position = LegendPosition.Bottom;
+        ApplyHoverTooltip(options);
+    }
+
+    public static void ApplyColumns<T>(ApexChartOptions<T> options) where T : class =>
+        ApplyColumns(options, stacked: false);
+
+    public static void ApplyColumns<T>(ApexChartOptions<T> options, bool stacked) where T : class
+    {
+        options.Colors = [Colors.MoneyIn, Colors.MoneyOut];
+        options.DataLabels = new DataLabels { Enabled = false };
+        if (options.Chart is not null)
+            options.Chart.Stacked = stacked;
         options.PlotOptions ??= new PlotOptions();
         options.PlotOptions.Bar = new PlotOptionsBar
         {
@@ -112,11 +132,34 @@ public static class ChartThemeOptions
         };
         if (options.Legend is not null)
             options.Legend.Position = LegendPosition.Bottom;
+        ApplyHoverTooltip(options);
+    }
+
+    public static void ApplyCategoryBars<T>(ApexChartOptions<T> options) where T : class
+    {
+        options.Colors = Colors.ChartSeries();
+        options.DataLabels = new DataLabels { Enabled = false };
+        options.PlotOptions ??= new PlotOptions();
+        options.PlotOptions.Bar = new PlotOptionsBar
+        {
+            Horizontal = true,
+            Distributed = true,
+            BorderRadius = 6,
+            BarHeight = "62%"
+        };
+        options.Legend = new Legend { Show = false };
+        ApplyHoverTooltip(options);
+    }
+
+    public static void ApplyCategoryArea<T>(ApexChartOptions<T> options) where T : class
+    {
+        ApplyCategoryLines(options);
+        options.Fill = AreaFill(0.35, 0.04);
     }
 
     public static void ApplyDonut<T>(ApexChartOptions<T> options, string totalLabel) where T : class
     {
-        options.Colors = CategoryColors.ToList();
+        options.Colors = Colors.ChartSeries();
         options.DataLabels = new DataLabels { Enabled = false };
         options.Stroke = new Stroke { Width = 3 };
         if (options.PlotOptions?.Pie?.Donut is { } donut)
@@ -136,22 +179,38 @@ public static class ChartThemeOptions
 
     public static void ApplyCategoryLines<T>(ApexChartOptions<T> options) where T : class
     {
-        options.Colors = CategoryColors.ToList();
+        options.Colors = Colors.ChartSeries();
         options.Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 };
         options.DataLabels = new DataLabels { Enabled = false };
-        options.Markers = new Markers { Size = 0 };
+        options.Markers = HoverMarkers(0);
         if (options.Legend is not null)
             options.Legend.Position = LegendPosition.Bottom;
+        ApplyHoverTooltip(options);
     }
 
     public static void ApplyForecastArea<T>(ApexChartOptions<T> options) where T : class
     {
-        options.Colors = ["#2dd4bf"];
+        options.Colors = [Colors.MoneyIn];
         options.Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 };
         options.DataLabels = new DataLabels { Enabled = false };
         options.Fill = AreaFill(0.4, 0.02);
-        options.Markers = new Markers { Size = 4 };
+        options.Markers = HoverMarkers(4);
+        ApplyHoverTooltip(options);
     }
+
+    private static void ApplyHoverTooltip<T>(ApexChartOptions<T> options) where T : class
+    {
+        options.Tooltip ??= new Tooltip();
+        options.Tooltip.Shared = true;
+        options.Tooltip.Intersect = false;
+        options.Tooltip.Custom = HoverTooltip;
+    }
+
+    private static Markers HoverMarkers(int size) => new()
+    {
+        Size = size,
+        Hover = new MarkersHover { Size = size + 5 }
+    };
 
     private static Fill AreaFill(double from, double to) => new()
     {
