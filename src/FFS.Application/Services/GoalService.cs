@@ -37,10 +37,7 @@ public sealed class GoalService
             .ToHashSet();
 
         var related = _data.Transactions
-            .Where(t =>
-                linkedIds.Contains(t.Id) ||
-                t.Merchant.Contains(g.Name, StringComparison.OrdinalIgnoreCase) ||
-                t.Description.Contains(g.Name, StringComparison.OrdinalIgnoreCase))
+            .Where(t => linkedIds.Contains(t.Id))
             .OrderByDescending(t => t.TransactionDate)
             .ToList();
 

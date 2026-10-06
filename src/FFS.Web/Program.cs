@@ -13,5 +13,6 @@ builder.Services.AddFfsApplication();
 builder.Services.AddApexCharts();
 builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<AppBootService>();
+builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
 await builder.Build().RunAsync();

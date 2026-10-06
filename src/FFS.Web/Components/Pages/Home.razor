@@ -49,7 +49,7 @@
 </div>
 
 <div class="grid-2">
-    <div class="card">
+    <div class="card chart-card">
         <div class="card-header">
             <div>
                 <h3><i class="bi bi-activity"></i> Cash flow trend</h3>
@@ -57,14 +57,14 @@
             </div>
             <span class="pill quiet">Last 6 months</span>
         </div>
-        <ApexChart @key="@($"home-trend-{Theme.IsDark}")" TItem="MonthlyTrendPoint" Height="260" Options="_trendOptions">
-            <ApexPointSeries TItem="MonthlyTrendPoint" Items="vm.CashFlowTrend" Name="Money In" SeriesType="SeriesType.Line"
+        <ApexChart @key="@($"home-trend-{Theme.IsDark}")" TItem="MonthlyTrendPoint" Height="280" Options="_trendOptions">
+            <ApexPointSeries TItem="MonthlyTrendPoint" Items="vm.CashFlowTrend" Name="Money In" SeriesType="SeriesType.Area"
                              XValue="@(e => e.Month)" YValue="@(e => e.MoneyIn)" />
-            <ApexPointSeries TItem="MonthlyTrendPoint" Items="vm.CashFlowTrend" Name="Money Out" SeriesType="SeriesType.Line"
+            <ApexPointSeries TItem="MonthlyTrendPoint" Items="vm.CashFlowTrend" Name="Money Out" SeriesType="SeriesType.Area"
                              XValue="@(e => e.Month)" YValue="@(e => e.MoneyOut)" />
         </ApexChart>
     </div>
-    <div class="card">
+    <div class="card chart-card">
         <div class="card-header">
             <div>
                 <h3><i class="bi bi-pie-chart"></i> Spending by category</h3>
@@ -217,22 +217,9 @@
 
     private void RebuildCharts()
     {
-        _trendOptions = ChartThemeOptions.Create<MonthlyTrendPoint>(Theme.IsDark, o =>
-        {
-            o.Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 };
-            o.DataLabels = new DataLabels { Enabled = false };
-            o.Colors = ["#2dd4bf", "#fb7185"];
-            o.Legend!.Position = LegendPosition.Bottom;
-        });
+        _trendOptions = ChartThemeOptions.Create<MonthlyTrendPoint>(Theme.IsDark, ChartThemeOptions.ApplyCashFlowArea);
         _donutOptions = ChartThemeOptions.Create<CategoryTotal>(Theme.IsDark, o =>
-        {
-            if (o.PlotOptions?.Pie?.Donut?.Labels?.Total is { } total)
-            {
-                total.Show = true;
-                total.Label = "Total spent";
-            }
-            o.Legend = new Legend { Show = false };
-        });
+            ChartThemeOptions.ApplyDonut(o, "Total spent"));
     }
 
     private void DrillMoneyIn()

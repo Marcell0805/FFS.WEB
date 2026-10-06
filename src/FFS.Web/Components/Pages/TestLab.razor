@@ -1,0 +1,85 @@
+@page "/test"
+@inject IFinancialDataProvider Data
+@inject NavigationManager Nav
+@inject HttpClient Http
+
+<PageTitle>@AppBrand.Name · Test</PageTitle>
+
+<PageHeader Eyebrow="Test" Title="Demo tools" Subtitle="Load sample money, add one transaction, or clear the ledger. This stays in the browser." />
+
+@if (!string.IsNullOrWhiteSpace(_notice))
+{
+    <p class="pill">@_notice</p>
+}
+
+<div class="settings-card">
+    <button type="button" class="settings-row buttonish" @onclick="LoadDemo">
+        <span class="settings-icon accent"><i class="bi bi-calendar3"></i></span>
+        <span class="settings-copy">
+            <strong>Load 3-month demo</strong>
+            <span class="muted small">Replace the ledger with the sample accounts, transactions, and goals</span>
+        </span>
+    </button>
+    <button type="button" class="settings-row buttonish" @onclick="AddIn">
+        <span class="settings-icon success"><i class="bi bi-arrow-down-left"></i></span>
+        <span class="settings-copy">
+            <strong>Add money in</strong>
+            <span class="muted small">R2,500.00 salary top-up on the first account</span>
+        </span>
+    </button>
+    <button type="button" class="settings-row buttonish" @onclick="AddOut">
+        <span class="settings-icon" style="background:rgba(220,38,38,.12);color:var(--ffs-error, #dc2626);"><i class="bi bi-arrow-up-right"></i></span>
+        <span class="settings-copy">
+            <strong>Add money out</strong>
+            <span class="muted small">R186.50 card purchase on the first account</span>
+        </span>
+    </button>
+    <button type="button" class="settings-row buttonish" @onclick="Clear">
+        <span class="settings-icon muted-icon"><i class="bi bi-trash"></i></span>
+        <span class="settings-copy">
+            <strong>Clear ledger</strong>
+            <span class="muted small">Remove transactions, balances, budget figures, and goal progress. Accounts and categories stay</span>
+        </span>
+    </button>
+</div>
+
+<p class="muted" style="margin-top:1rem;">@Data.Transactions.Count transactions · @Data.Accounts.Count accounts</p>
+<p><a href="http://localhost:5088/swagger" target="_blank" rel="noopener noreferrer">Open the API in Swagger</a></p>
+
+@code {
+    private string? _notice;
+
+    private void LoadDemo()
+    {
+        Data.ReloadDemo();
+        _notice = "Loaded the 3-month demo.";
+    }
+
+    private void AddIn()
+    {
+        var txn = Data.AddMoney(MoneyDirection.MoneyIn);
+        _notice = $"Added {MoneyFormat.Zar(txn.Amount)} in.";
+    }
+
+    private void AddOut()
+    {
+        var txn = Data.AddMoney(MoneyDirection.MoneyOut);
+        _notice = $"Added {MoneyFormat.Zar(txn.Amount)} out.";
+    }
+
+    private async Task Clear()
+    {
+        Data.ClearLedger();
+        try
+        {
+            await Http.DeleteAsync("http://localhost:5088/v1/messages");
+        }
+        catch
+        {
+            // The Swagger API is optional. The browser ledger is already clear.
+        }
+
+        _notice = "Ledger cleared. Balances and budget figures are zero.";
+        Nav.NavigateTo("test", forceLoad: false);
+    }
+}

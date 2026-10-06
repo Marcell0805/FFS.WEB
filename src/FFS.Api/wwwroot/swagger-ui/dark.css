@@ -1,0 +1,213 @@
+/* Dark theme — applied only when html has class swagger-theme-dark */
+
+html.swagger-theme-dark {
+  color-scheme: dark;
+  --ffs-bg: #0f1419;
+  --ffs-surface: #1a2332;
+  --ffs-surface-2: #243044;
+  --ffs-border: #2d3a4f;
+  --ffs-text: #e7ecf3;
+  --ffs-muted: #9aa8bc;
+  --ffs-accent: #4ea1ff;
+  --ffs-get: #61affe;
+  --ffs-post: #49cc90;
+  --ffs-put: #fca130;
+  --ffs-delete: #f93e3e;
+  --ffs-patch: #50e3c2;
+}
+
+html.swagger-theme-dark body,
+html.swagger-theme-dark .swagger-ui {
+  background: var(--ffs-bg) !important;
+  color: var(--ffs-text) !important;
+}
+
+html.swagger-theme-dark .swagger-ui .topbar {
+  background: #0b1016 !important;
+  border-bottom: 1px solid var(--ffs-border);
+}
+
+html.swagger-theme-dark .swagger-ui .topbar .download-url-wrapper .select-label span {
+  color: var(--ffs-muted) !important;
+}
+
+html.swagger-theme-dark .swagger-ui .info .title,
+html.swagger-theme-dark .swagger-ui .info h1,
+html.swagger-theme-dark .swagger-ui .info h2,
+html.swagger-theme-dark .swagger-ui .info h3,
+html.swagger-theme-dark .swagger-ui .info li,
+html.swagger-theme-dark .swagger-ui .info p,
+html.swagger-theme-dark .swagger-ui .info table,
+html.swagger-theme-dark .swagger-ui .info .base-url,
+html.swagger-theme-dark .swagger-ui .opblock-tag,
+html.swagger-theme-dark .swagger-ui .opblock-tag small,
+html.swagger-theme-dark .swagger-ui .opblock .opblock-summary-description,
+html.swagger-theme-dark .swagger-ui .opblock .opblock-summary-path,
+html.swagger-theme-dark .swagger-ui .opblock .opblock-summary-path__deprecated,
+html.swagger-theme-dark .swagger-ui .tab li,
+html.swagger-theme-dark .swagger-ui table thead tr td,
+html.swagger-theme-dark .swagger-ui table thead tr th,
+html.swagger-theme-dark .swagger-ui .parameter__name,
+html.swagger-theme-dark .swagger-ui .parameter__type,
+html.swagger-theme-dark .swagger-ui .parameter__deprecated,
+html.swagger-theme-dark .swagger-ui .parameter__in,
+html.swagger-theme-dark .swagger-ui .response-col_status,
+html.swagger-theme-dark .swagger-ui .response-col_links,
+html.swagger-theme-dark .swagger-ui .response-col_description,
+html.swagger-theme-dark .swagger-ui label,
+html.swagger-theme-dark .swagger-ui .model-title,
+html.swagger-theme-dark .swagger-ui .model,
+html.swagger-theme-dark .swagger-ui .prop-type,
+html.swagger-theme-dark .swagger-ui .prop-format,
+html.swagger-theme-dark .swagger-ui section.models h4,
+html.swagger-theme-dark .swagger-ui .scheme-container .schemes > label,
+html.swagger-theme-dark .swagger-ui .btn,
+html.swagger-theme-dark .swagger-ui .dialog-ux .modal-ux-header h3,
+html.swagger-theme-dark .swagger-ui .dialog-ux .modal-ux-content p,
+html.swagger-theme-dark .swagger-ui .dialog-ux .modal-ux-content h4 {
+  color: var(--ffs-text) !important;
+}
+
+html.swagger-theme-dark .swagger-ui .info .title small,
+html.swagger-theme-dark .swagger-ui .renderedMarkdown p,
+html.swagger-theme-dark .swagger-ui .markdown p,
+html.swagger-theme-dark .swagger-ui .parameter__name.required span,
+html.swagger-theme-dark .swagger-ui small {
+  color: var(--ffs-muted) !important;
+}
+
+html.swagger-theme-dark .swagger-ui a.nostyle,
+html.swagger-theme-dark .swagger-ui a.nostyle:visited,
+html.swagger-theme-dark .swagger-ui .info a {
+  color: var(--ffs-accent) !important;
+}
+
+html.swagger-theme-dark .swagger-ui .scheme-container,
+html.swagger-theme-dark .swagger-ui section.models,
+html.swagger-theme-dark .swagger-ui .dialog-ux .modal-ux {
+  background: var(--ffs-surface) !important;
+  border-color: var(--ffs-border) !important;
+  box-shadow: none !important;
+}
+
+html.swagger-theme-dark .swagger-ui .opblock {
+  background: var(--ffs-surface) !important;
+  border-color: var(--ffs-border) !important;
+  box-shadow: none !important;
+}
+
+html.swagger-theme-dark .swagger-ui .opblock .opblock-summary {
+  border-color: var(--ffs-border) !important;
+}
+
+html.swagger-theme-dark .swagger-ui .opblock.opblock-get { border-color: var(--ffs-get) !important; }
+html.swagger-theme-dark .swagger-ui .opblock.opblock-post { border-color: var(--ffs-post) !important; }
+html.swagger-theme-dark .swagger-ui .opblock.opblock-put { border-color: var(--ffs-put) !important; }
+html.swagger-theme-dark .swagger-ui .opblock.opblock-delete { border-color: var(--ffs-delete) !important; }
+html.swagger-theme-dark .swagger-ui .opblock.opblock-patch { border-color: var(--ffs-patch) !important; }
+
+html.swagger-theme-dark .swagger-ui .opblock.opblock-get .opblock-summary-method { background: var(--ffs-get) !important; }
+html.swagger-theme-dark .swagger-ui .opblock.opblock-post .opblock-summary-method { background: var(--ffs-post) !important; }
+html.swagger-theme-dark .swagger-ui .opblock.opblock-put .opblock-summary-method { background: var(--ffs-put) !important; }
+html.swagger-theme-dark .swagger-ui .opblock.opblock-delete .opblock-summary-method { background: var(--ffs-delete) !important; }
+html.swagger-theme-dark .swagger-ui .opblock.opblock-patch .opblock-summary-method { background: var(--ffs-patch) !important; }
+
+html.swagger-theme-dark .swagger-ui .opblock-body,
+html.swagger-theme-dark .swagger-ui .opblock-section-header,
+html.swagger-theme-dark .swagger-ui .opblock-description-wrapper,
+html.swagger-theme-dark .swagger-ui .responses-inner,
+html.swagger-theme-dark .swagger-ui .model-box,
+html.swagger-theme-dark .swagger-ui .model-container {
+  background: var(--ffs-surface) !important;
+}
+
+html.swagger-theme-dark .swagger-ui .opblock-section-header {
+  border-color: var(--ffs-border) !important;
+  box-shadow: none !important;
+}
+
+html.swagger-theme-dark .swagger-ui input[type="text"],
+html.swagger-theme-dark .swagger-ui input[type="password"],
+html.swagger-theme-dark .swagger-ui input[type="search"],
+html.swagger-theme-dark .swagger-ui input[type="email"],
+html.swagger-theme-dark .swagger-ui input[type="file"],
+html.swagger-theme-dark .swagger-ui textarea,
+html.swagger-theme-dark .swagger-ui select {
+  background: var(--ffs-surface-2) !important;
+  color: var(--ffs-text) !important;
+  border: 1px solid var(--ffs-border) !important;
+}
+
+html.swagger-theme-dark .swagger-ui .btn {
+  background: var(--ffs-surface-2) !important;
+  border: 1px solid var(--ffs-border) !important;
+  box-shadow: none !important;
+}
+
+html.swagger-theme-dark .swagger-ui .btn.execute {
+  background: var(--ffs-accent) !important;
+  border-color: var(--ffs-accent) !important;
+  color: #041018 !important;
+}
+
+html.swagger-theme-dark .swagger-ui .btn.authorize {
+  color: var(--ffs-post) !important;
+  border-color: var(--ffs-post) !important;
+}
+
+html.swagger-theme-dark .swagger-ui .btn.authorize svg {
+  fill: var(--ffs-post) !important;
+}
+
+html.swagger-theme-dark .swagger-ui .highlight-code,
+html.swagger-theme-dark .swagger-ui .microlight,
+html.swagger-theme-dark .swagger-ui .curl-command,
+html.swagger-theme-dark .swagger-ui .request-url,
+html.swagger-theme-dark .swagger-ui .response .highlight-code {
+  background: #0b1016 !important;
+  color: var(--ffs-text) !important;
+  border: 1px solid var(--ffs-border) !important;
+}
+
+html.swagger-theme-dark .swagger-ui table tbody tr td {
+  border-color: var(--ffs-border) !important;
+  color: var(--ffs-text) !important;
+}
+
+html.swagger-theme-dark .swagger-ui .loading-container .loading::before {
+  border-color: var(--ffs-accent) transparent var(--ffs-accent) transparent !important;
+}
+
+html.swagger-theme-dark .swagger-ui .filter .operation-filter-input {
+  background: var(--ffs-surface-2) !important;
+  border-color: var(--ffs-border) !important;
+  color: var(--ffs-text) !important;
+}
+
+/* Theme toggle button (both themes) */
+#ffs-theme-toggle {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  border: 1px solid #d0d4db;
+  background: #fff;
+  color: #3b4151;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+html.swagger-theme-dark #ffs-theme-toggle {
+  border-color: var(--ffs-border);
+  background: var(--ffs-surface-2);
+  color: var(--ffs-text);
+}
+
+.swagger-ui .topbar {
+  position: relative;
+}

@@ -31,7 +31,7 @@
 </div>
 
 <div class="grid-2">
-    <div class="card">
+    <div class="card chart-card">
         <div class="card-header">
             <div>
                 <h3><i class="bi bi-graph-up"></i> Projected balance path</h3>
@@ -45,7 +45,7 @@
         </div>
         <ApexChart @key="@($"proj-{_chartKey}-{Theme.IsDark}")" TItem="ProjectionPoint" Height="300" Options="_chartOptions">
             <ApexPointSeries TItem="ProjectionPoint" Items="_result.Points.ToList()" Name="Projected balance"
-                             SeriesType="SeriesType.Line" XValue="@(e => e.Label)" YValue="@(e => e.Balance)" />
+                             SeriesType="SeriesType.Area" XValue="@(e => e.Label)" YValue="@(e => e.Balance)" />
         </ApexChart>
     </div>
     <div class="card">
@@ -117,13 +117,7 @@
 
     private void RebuildOptions()
     {
-        _chartOptions = ChartThemeOptions.Create<ProjectionPoint>(Theme.IsDark, o =>
-        {
-            o.Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 };
-            o.DataLabels = new DataLabels { Enabled = false };
-            o.Colors = ["#2dd4bf"];
-            o.Markers = new Markers { Size = 4 };
-        });
+        _chartOptions = ChartThemeOptions.Create<ProjectionPoint>(Theme.IsDark, ChartThemeOptions.ApplyForecastArea);
     }
 
     public void Dispose() => Theme.Changed -= OnThemeChanged;

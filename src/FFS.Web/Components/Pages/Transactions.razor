@@ -265,6 +265,25 @@
                 }
             </select>
         </div>
+        <div class="field">
+            <label class="check-line">
+                <input type="checkbox" @bind="_towardsGoal" />
+                Towards a goal
+            </label>
+        </div>
+        @if (_towardsGoal)
+        {
+            <div class="field">
+                <label>Goal</label>
+                <select @bind="_goalId">
+                    <option value="">Choose a goal</option>
+                    @foreach (var goal in Data.Goals.Where(g => g.IsActive))
+                    {
+                        <option value="@goal.Id">@goal.Name</option>
+                    }
+                </select>
+            </div>
+        }
         <div style="display:flex; gap:0.5rem; margin-top:1rem;">
             <button type="button" @onclick="Save">Save</button>
             <button type="button" class="secondary" @onclick="Close">Cancel</button>
@@ -294,6 +313,8 @@
     private TransactionGroupBy _groupBy = TransactionGroupBy.None;
     private Transaction? _edit;
     private string _editCategoryId = "";
+    private bool _towardsGoal;
+    private string _goalId = "";
     private string _activeHint = "";
     private string _lastQuery = "";
 
@@ -497,6 +518,9 @@
             Reference = t.Reference
         };
         _editCategoryId = t.CategoryId?.ToString() ?? "";
+        var linked = Data.GoalIdForTransaction(t.Id);
+        _towardsGoal = linked.HasValue;
+        _goalId = linked?.ToString() ?? "";
     }
 
     private void Save()
@@ -506,6 +530,8 @@
         if (_edit.Status is not TransactionStatus.Ignored and not TransactionStatus.Captured)
             _edit.Status = TransactionStatus.Edited;
         TxnQuery.Update(_edit);
+        long? goalId = _towardsGoal && long.TryParse(_goalId, out var gid) ? gid : null;
+        Data.SetTransactionGoal(_edit.Id, goalId);
         _edit = null;
     }
 

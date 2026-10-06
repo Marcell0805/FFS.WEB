@@ -1,0 +1,97 @@
+@page "/help"
+@inject HttpClient Http
+
+<PageTitle>@AppBrand.Name · Help</PageTitle>
+
+<PageHeader Eyebrow="Help" Title="Answers" Subtitle="Search the same questions as the app listing." />
+
+<label class="catalog-search help-search">
+    <span class="visually-hidden">Search help</span>
+    <input type="search" placeholder="Search questions…" @bind="_query" @bind:event="oninput" />
+</label>
+
+@if (_items.Count == 0 && _loaded)
+{
+    <p class="muted">Help could not be loaded.</p>
+}
+else if (Visible.Count == 0)
+{
+    <p class="muted">Nothing matches that search.</p>
+}
+else
+{
+    @foreach (var item in Visible)
+    {
+        <article class="card help-item">
+            <h3>@item.Question</h3>
+            <p>@item.Answer</p>
+        </article>
+    }
+}
+
+@code {
+    private string _query = "";
+    private bool _loaded;
+    private List<FaqItem> _items = [];
+
+    private IReadOnlyList<FaqItem> Visible
+    {
+        get
+        {
+            var q = _query.Trim();
+            if (q.Length == 0) return _items;
+            return _items.Where(i =>
+                i.Question.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                i.Answer.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var text = await Http.GetStringAsync("data/faq.md");
+            _items = Parse(text);
+        }
+        catch
+        {
+            _items = [];
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private static List<FaqItem> Parse(string text)
+    {
+        var items = new List<FaqItem>();
+        string? question = null;
+        var body = new List<string>();
+
+        void Flush()
+        {
+            if (string.IsNullOrWhiteSpace(question)) return;
+            items.Add(new FaqItem(question.Trim(), string.Join("\n", body).Trim()));
+            body.Clear();
+        }
+
+        foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            if (line.StartsWith("# ", StringComparison.Ordinal))
+            {
+                Flush();
+                question = line[2..];
+                continue;
+            }
+
+            if (question is not null)
+                body.Add(line);
+        }
+
+        Flush();
+        return items;
+    }
+
+    private sealed record FaqItem(string Question, string Answer);
+}

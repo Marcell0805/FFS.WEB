@@ -77,6 +77,28 @@ public sealed class ReportingService
             .ToList();
     }
 
+    public IReadOnlyList<InstitutionTotal> SpendingByInstitution(DateTime start, DateTime end)
+    {
+        var accounts = _data.Accounts.ToDictionary(a => a.Id);
+
+        return TransactionsInRange(start, end)
+            .Where(t => !CashFlowRules.SkipFromCashFlow(t))
+            .Where(t => t.Direction == MoneyDirection.MoneyOut)
+            .GroupBy(t =>
+            {
+                if (accounts.TryGetValue(t.AccountId, out var account) &&
+                    !string.IsNullOrWhiteSpace(account.InstitutionName))
+                    return account.InstitutionName;
+                return "Unknown";
+            })
+            .Select(g => new InstitutionTotal(
+                g.Key,
+                g.Sum(x => x.Amount),
+                g.Select(x => x.AccountId).Distinct().ToList()))
+            .OrderByDescending(x => x.Total)
+            .ToList();
+    }
+
     public IReadOnlyList<MonthlyTrendPoint> MonthlyTrend(DateTime start, DateTime end)
     {
         var points = new List<MonthlyTrendPoint>();

@@ -355,6 +355,10 @@ a { color: var(--ffs-accent); }
     font-size: 1.05rem;
 }
 
+.chart-card {
+    padding: 1.35rem 1.45rem 1.15rem;
+}
+
 .card-header {
     display: flex;
     justify-content: space-between;
@@ -1239,6 +1243,35 @@ html.ffs-skip-splash .splash-screen {
     align-items: center;
     padding: 0.9rem 1rem;
     border-bottom: 1px solid var(--ffs-border);
+    min-width: 0;
+}
+
+.settings-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.settings-copy strong,
+.settings-copy .muted {
+    overflow-wrap: anywhere;
+}
+
+.settings-chev {
+    color: var(--ffs-text-muted);
+    flex-shrink: 0;
+}
+
+a.settings-row {
+    text-decoration: none;
+    color: inherit;
+}
+
+a.settings-row:hover,
+button.settings-row.buttonish:hover {
+    background: rgba(20, 184, 166, 0.06);
 }
 
 .settings-row:last-child { border-bottom: 0; }
@@ -1266,6 +1299,34 @@ html.ffs-skip-splash .splash-screen {
 .settings-icon.accent { background: rgba(20, 184, 166, 0.14); color: var(--ffs-accent); }
 .settings-icon.success { background: rgba(22, 163, 74, 0.14); color: var(--ffs-success); }
 .settings-icon.muted-icon { background: rgba(100, 116, 139, 0.14); color: var(--ffs-text-muted); }
+
+.help-search {
+    display: block;
+    margin: 0 0 1rem;
+}
+
+.help-search input,
+.help-search input[type="search"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.help-item { margin-bottom: 0.75rem; }
+.help-item h3 { margin: 0 0 0.4rem; }
+.help-item p { margin: 0; white-space: pre-wrap; }
+.check-line { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; }
+.about-copy p:last-child { margin-bottom: 0; }
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
 
 .version-badge {
     font-size: 0.75rem;
@@ -1416,6 +1477,32 @@ html.ffs-skip-splash .splash-screen {
 }
 
 .legend-row .avatar { grid-column: auto; }
+
+.meter-copy {
+    display: grid;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.meter-track {
+    display: block;
+    height: 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ffs-accent) 14%, var(--ffs-border));
+    overflow: hidden;
+}
+
+.meter-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #0f766e, #2dd4bf);
+}
+
+html[data-theme="dark"] .meter-track,
+.app-shell.theme-dark .meter-track {
+    background: rgba(148, 163, 184, 0.16);
+}
 
 .snap-row {
     display: grid;

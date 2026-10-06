@@ -6,6 +6,8 @@ public record CategoryTotal(long? CategoryId, string CategoryName, decimal Total
 
 public record MerchantTotal(string Merchant, decimal Total, int TransactionCount, string? TopCategoryName);
 
+public record InstitutionTotal(string InstitutionName, decimal Total, IReadOnlyList<long> AccountIds);
+
 public record MonthlyTrendPoint(string Month, DateTime MonthStart, decimal MoneyIn, decimal MoneyOut);
 
 public record DailyCashFlowPoint(DateTime Day, string Label, decimal MoneyIn, decimal MoneyOut);

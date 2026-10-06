@@ -1,0 +1,23 @@
+@page "/accounts"
+@inject IFinancialDataProvider Data
+@inject ReportingService Reporting
+
+<PageTitle>@AppBrand.Name · Accounts</PageTitle>
+
+<PageHeader Eyebrow="Accounts" Title="Banks you track" Subtitle="Open an account to see its transactions." />
+
+<div class="settings-card">
+    @foreach (var account in Data.Accounts.OrderBy(a => a.Name))
+    {
+        var balance = Reporting.AccountBalance(account.Id);
+        <a class="settings-row buttonish" href="@($"transactions?accountId={account.Id}")">
+            <span class="settings-icon accent"><i class="bi bi-bank"></i></span>
+            <span class="settings-copy">
+                <strong>@account.Name</strong>
+                <span class="muted small">@account.InstitutionName · @account.AccountType@(account.IsActive ? "" : " · Inactive")</span>
+            </span>
+            <span class="amount @(balance < 0 ? "out" : "in")">@MoneyFormat.Zar(balance)</span>
+            <i class="bi bi-chevron-right settings-chev"></i>
+        </a>
+    }
+</div>
